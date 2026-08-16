@@ -2,7 +2,15 @@ import os from 'node:os';
 import { buildEscPos } from './escpos.js';
 import { printNetwork } from './networkPrinter.js';
 import { printSystemQueue } from './systemPrinters.js';
-import { getJob, getPrinter, insertAttempt, updateAttempt, updateJob, updatePrinterStatus } from './supabaseRest.js';
+import {
+  claimJob,
+  getJob,
+  getPrinter,
+  insertAttempt,
+  updateAttempt,
+  updateJob,
+  updatePrinterStatus,
+} from './supabaseRest.js';
 import type { PrinterConfig } from './types.js';
 
 const AGENT_VERSION = '0.1.0';
@@ -39,21 +47,32 @@ export async function runPrinterAdapter(printer: PrinterConfig, buffer: Buffer) 
 }
 
 export async function executeJob(jobId: string, token: string, adapter = runPrinterAdapter) {
-  const job = await getJob(jobId, token);
+  let job = await getJob(jobId, token);
   if (job.state === 'completed') {
     return { state: 'completed' as const, message: 'Este trabalho já foi concluído.' };
   }
+  if (job.state === 'failed') {
+    return { state: 'failed' as const, message: job.state === 'failed' ? 'Este trabalho já esgotou as tentativas.' : '' };
+  }
+
+  const claimed = await claimJob(job.id, token);
+  if (!claimed) {
+    job = await getJob(job.id, token);
+    if (job.state === 'completed') {
+      return { state: 'completed' as const, message: 'Este trabalho já foi concluído.' };
+    }
+    return {
+      state: 'processing' as const,
+      message: 'Este trabalho já está sendo processado por outro agente/computador.',
+    };
+  }
+
+  job = await getJob(job.id, token);
   const printer = await getPrinter(job.printer_id, token);
   if (!printer.id) throw Object.assign(new Error('Impressora sem identificador válido.'), { code: 'PRINTER_INVALID' });
   const printerId = printer.id;
   const maxAttempts = Math.max(1, Number(job.max_attempts));
   const initialAttempt = Number(job.attempt_count);
-
-  await updateJob(job.id, token, {
-    state: 'processing',
-    started_at: new Date().toISOString(),
-    last_error: null,
-  });
   const buffer = buildEscPos(job.receipt_payload);
 
   for (let index = initialAttempt + 1; index <= maxAttempts; index += 1) {
@@ -66,7 +85,7 @@ export async function executeJob(jobId: string, token: string, adapter = runPrin
       agent_version: AGENT_VERSION,
     });
     const attemptId = attempts[0]?.id;
-    await updateJob(job.id, token, { attempt_count: index, state: 'processing' });
+    await updateJob(job.id, token, { attempt_count: index, state: 'processing', updated_at: new Date().toISOString() });
 
     try {
       let lastMessage = '';
@@ -85,6 +104,7 @@ export async function executeJob(jobId: string, token: string, adapter = runPrin
       await updateJob(job.id, token, {
         state: 'completed',
         completed_at: new Date().toISOString(),
+        next_attempt_at: null,
         last_error: null,
       });
       return { state: 'completed' as const, message: lastMessage || 'Impressão concluída.' };
@@ -106,13 +126,12 @@ export async function executeJob(jobId: string, token: string, adapter = runPrin
         friendly.message,
       ).catch(() => undefined);
       await updateJob(job.id, token, {
-        state: finalAttempt ? 'failed' : 'pending',
+        state: finalAttempt ? 'failed' : 'processing',
         last_error: friendly.message,
         next_attempt_at: finalAttempt ? null : new Date(Date.now() + Number(job.retry_interval_ms)).toISOString(),
       });
       if (finalAttempt) return { state: 'failed' as const, message: friendly.message };
       await new Promise((resolve) => setTimeout(resolve, Number(job.retry_interval_ms)));
-      await updateJob(job.id, token, { state: 'processing' });
     }
   }
 
