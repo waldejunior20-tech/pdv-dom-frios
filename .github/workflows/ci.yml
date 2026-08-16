@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
 
@@ -16,7 +16,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install dependencies
+      - name: Install frontend dependencies
         run: npm install
-      - name: Typecheck and build
+      - name: Install print agent dependencies
+        run: npm --prefix agent install
+      - name: Run formatter
+        run: npm run format
+      - name: Lint
+        run: npm run lint
+      - name: Frontend tests
+        run: npm run test
+      - name: Frontend typecheck and build
         run: npm run build
+      - name: Agent tests
+        run: npm run agent:test
+      - name: Agent typecheck and build
+        run: npm run agent:build
