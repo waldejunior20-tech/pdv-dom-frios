@@ -30,6 +30,13 @@ export async function getJob(jobId: string, token: string) {
   return rows[0];
 }
 
+export async function claimJob(jobId: string, token: string) {
+  return rest<boolean>('rpc/claim_print_job', token, {
+    method: 'POST',
+    body: JSON.stringify({ p_job_id: jobId }),
+  });
+}
+
 export async function getPrinter(printerId: string, token: string) {
   const rows = await rest<PrinterConfig[]>(`printers?id=eq.${encodeURIComponent(printerId)}&select=*`, token);
   if (!rows[0]) throw Object.assign(new Error('Impressora não encontrada.'), { code: 'PRINTER_NOT_FOUND' });
