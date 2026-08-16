@@ -13,9 +13,15 @@ function widthForPaper(paperWidth: 58 | 80) {
   return paperWidth === 58 ? 32 : 42;
 }
 
+function stripControlCharacters(value: string) {
+  return Array.from(value, (character) => {
+    const code = character.codePointAt(0) ?? 32;
+    return code < 32 || code === 127 ? ' ' : character;
+  }).join('');
+}
+
 function clean(value: string | null | undefined) {
-  return String(value ?? '')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+  return stripControlCharacters(String(value ?? ''))
     .replace(/\s+/g, ' ')
     .trim();
 }
