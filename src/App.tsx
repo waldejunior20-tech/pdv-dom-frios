@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "react-aria-components";
-import { CreditCard, Search, Trash2, X } from "lucide-react";
+import { CreditCard, Plus, Search, Trash2, X } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { SaleSchema, type CartItem } from "./schemas";
@@ -24,7 +24,7 @@ const paymentToDb = {
 } as const;
 
 type Payment = keyof typeof paymentToDb;
-type Category = "Todos" | "Frios" | "Molhos" | "Massas" | "Outros";
+type OrderType = "entrega" | "retirada";
 type Product = {
   id: string;
   nome: string;
@@ -32,29 +32,15 @@ type Product = {
   preco_padrao: number;
 };
 
-const categories: Category[] = ["Todos", "Frios", "Molhos", "Massas", "Outros"];
-
-function categoryOf(name: string): Exclude<Category, "Todos"> {
+function categoryOf(name: string) {
   const n = name.toLocaleLowerCase("pt-BR");
   if (
     /mussarela|muçarela|presunto|apresuntado|bacon|calabresa|mortadela|queijo|peito/.test(
       n,
     )
   )
-    return "Frios";
-  if (/ketchup|maionese|molho|mostarda/.test(n)) return "Molhos";
-  if (/massa|farinha|pastel/.test(n)) return "Massas";
-  return "Outros";
-}
-
-function shortCategory(category: ReturnType<typeof categoryOf>) {
-  return category === "Frios"
-    ? "FR"
-    : category === "Molhos"
-      ? "ML"
-      : category === "Massas"
-        ? "MS"
-        : "PR";
+    return true;
+  return false;
 }
 
 function newId() {
@@ -120,13 +106,18 @@ function Login({ onSession }: { onSession: (session: Session) => void }) {
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [category, setCategory] = useState<Category>("Todos");
   const [search, setSearch] = useState("");
   const [customer, setCustomer] = useState("");
+  const [phone, setPhone] = useState("");
+  const [orderType, setOrderType] = useState<OrderType>("entrega");
+  const [street, setStreet] = useState("");
+  const [addressNumber, setAddressNumber] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+  const [reference, setReference] = useState("");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(
     null,
   );
-  const [display, setDisplay] = useState("0");
+  const [quantityInput, setQuantityInput] = useState("1");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [saleId, setSaleId] = useState(newId());
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -173,30 +164,21 @@ export default function App() {
   const visibleProducts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return products.filter((product) => {
-      const categoryOk =
-        category === "Todos" || categoryOf(product.nome) === category;
+      const categoryOk = categoryOf(product.nome);
       const searchOk =
         !term || product.nome.toLocaleLowerCase("pt-BR").includes(term);
       return categoryOk && searchOk;
     });
-  }, [products, category, search]);
+  }, [products, search]);
 
   if (session === undefined)
     return <div className="boot-screen">Carregando caixa...</div>;
   if (!session) return <Login onSession={setSession} />;
   const ownerId = session.user.id;
 
-  function pressNumber(value: string) {
-    if (value === "." && display.includes(".")) return;
-    if (display.length >= 8) return;
-    setDisplay((current) =>
-      current === "0" && value !== "." ? value : current + value,
-    );
-  }
-
   function addSelected() {
-    if (!selectedProduct) return setStatus("Toque em um produto primeiro.");
-    const quantity = Number(display);
+    if (!selectedProduct) return setStatus("Selecione um produto primeiro.");
+    const quantity = Number(quantityInput.replace(",", "."));
     if (!Number.isFinite(quantity) || quantity <= 0)
       return setStatus("Digite um peso/quantidade maior que zero.");
     if (!(selectedProduct.preco_padrao > 0))
@@ -236,7 +218,7 @@ export default function App() {
         },
       ];
     });
-    setDisplay("0");
+    setQuantityInput("1");
     setStatus(`${selectedProduct.nome} adicionado.`);
   }
 
@@ -249,8 +231,13 @@ export default function App() {
   function clearSale() {
     setCart([]);
     setSelectedProductId(null);
-    setDisplay("0");
+    setQuantityInput("1");
     setCustomer("");
+    setPhone("");
+    setStreet("");
+    setAddressNumber("");
+    setNeighborhood("");
+    setReference("");
     setSaleId(newId());
     setStatus("Venda limpa.");
   }
@@ -266,6 +253,30 @@ export default function App() {
 
   async function finalize(payment: Payment) {
     if (saving || !cart.length) return;
+
+    if (!customer.trim() || !phone.trim()) {
+      setStatus("Informe o nome e o telefone do cliente.");
+      setPaymentOpen(false);
+      return;
+    }
+    if (
+      orderType === "entrega" &&
+      (!street.trim() || !addressNumber.trim() || !neighborhood.trim())
+    ) {
+      setStatus("Para entrega, informe rua, número e bairro.");
+      setPaymentOpen(false);
+      return;
+    }
+
+    const fullAddress =
+      orderType === "entrega"
+        ? `${street.trim()}, ${addressNumber.trim()}`
+        : "Retirada no balcão";
+    const orderNote = reference.trim()
+      ? `Ponto de referência: ${reference.trim()}`
+      : orderType === "retirada"
+        ? "Retirada no balcão"
+        : null;
 
     const parsed = SaleSchema.safeParse({
       saleId,
@@ -284,9 +295,9 @@ export default function App() {
     setStatus("Salvando venda...");
     const rows = parsed.data.items.map((item) => ({
       cliente_nome: parsed.data.customer,
-      whatsapp: null,
-      bairro: null,
-      endereco: null,
+      whatsapp: phone.trim(),
+      bairro: orderType === "entrega" ? neighborhood.trim() : null,
+      endereco: fullAddress,
       produto_id: item.productId,
       produto_nome: item.name,
       quantidade: item.quantity,
@@ -295,7 +306,7 @@ export default function App() {
       desconto: item.discount,
       forma_pagamento: paymentToDb[payment],
       status: "pendente",
-      observacao: "Venda Touch POS V2",
+      observacao: orderNote,
       request_id: item.requestId,
       venda_id: parsed.data.saleId,
     }));
@@ -317,13 +328,17 @@ export default function App() {
         p_sale: {
           id: saleId,
           cliente_nome: parsed.data.customer,
+          whatsapp: phone.trim(),
+          bairro: orderType === "entrega" ? neighborhood.trim() : null,
+          endereco: fullAddress,
+          tipo_pedido: orderType,
           subtotal,
           desconto: discount,
           taxa: 0,
           forma_pagamento: paymentToDb[payment],
           situacao_pagamento: "confirmado",
           status: saleStatus,
-          observacao: "Venda Touch POS V2",
+          observacao: orderNote,
         },
         p_items: rows,
       });
@@ -358,8 +373,13 @@ export default function App() {
       setPaymentOpen(false);
       setCart([]);
       setSelectedProductId(null);
-      setDisplay("0");
+      setQuantityInput("1");
       setCustomer("");
+      setPhone("");
+      setStreet("");
+      setAddressNumber("");
+      setNeighborhood("");
+      setReference("");
       setSaleId(newId());
       setStatus(`Venda finalizada em ${payment}: ${money.format(total)}.`);
     } catch (error) {
@@ -435,39 +455,89 @@ export default function App() {
       <div className="pos-shell">
         <main className="pos-layout">
           <section className="catalog">
-            <div className="customer-row">
-              <label>
-                <span>Cliente</span>
+            <section className="sale-customer-card" aria-label="Dados da venda">
+              <div className="order-type" aria-label="Tipo do pedido">
+                {(["entrega", "retirada"] as OrderType[]).map((type) => (
+                  <Button
+                    key={type}
+                    className={`order-type-button ${orderType === type ? "active" : ""}`}
+                    onPress={() => setOrderType(type)}
+                  >
+                    {type === "entrega" ? "Entrega" : "Retirada"}
+                  </Button>
+                ))}
+              </div>
+              <div className="customer-fields">
+                <label>
+                  <span>Nome do cliente *</span>
+                  <input
+                    value={customer}
+                    onChange={(e) => setCustomer(e.target.value)}
+                    placeholder="Nome"
+                  />
+                </label>
+                <label>
+                  <span>Telefone *</span>
+                  <input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="(00) 00000-0000"
+                    inputMode="tel"
+                  />
+                </label>
+                {orderType === "entrega" && (
+                  <>
+                    <label className="field-wide">
+                      <span>Rua *</span>
+                      <input
+                        value={street}
+                        onChange={(e) => setStreet(e.target.value)}
+                        placeholder="Rua / avenida"
+                      />
+                    </label>
+                    <label>
+                      <span>Número *</span>
+                      <input
+                        value={addressNumber}
+                        onChange={(e) => setAddressNumber(e.target.value)}
+                        placeholder="Nº"
+                      />
+                    </label>
+                    <label>
+                      <span>Bairro *</span>
+                      <input
+                        value={neighborhood}
+                        onChange={(e) => setNeighborhood(e.target.value)}
+                        placeholder="Bairro"
+                      />
+                    </label>
+                    <label className="field-wide">
+                      <span>Ponto de referência</span>
+                      <input
+                        value={reference}
+                        onChange={(e) => setReference(e.target.value)}
+                        placeholder="Ex.: próximo à praça"
+                      />
+                    </label>
+                  </>
+                )}
+              </div>
+            </section>
+
+            <div className="catalog-toolbar">
+              <div>
+                <h1>Frios</h1>
+                <p>Selecione um produto e informe a quantidade.</p>
+              </div>
+              <label className="search-input" aria-label="Pesquisar frios">
+                <Search size={18} />
                 <input
-                  value={customer}
-                  onChange={(e) => setCustomer(e.target.value)}
-                  placeholder="Venda rápida / nome do cliente"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Pesquisar frios"
                 />
               </label>
-              <label>
-                <span>Pesquisar produto</span>
-                <div className="search-input">
-                  <Search size={18} />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Digite o nome..."
-                  />
-                </div>
-              </label>
             </div>
-
-            <nav className="categories" aria-label="Categorias">
-              {categories.map((item) => (
-                <Button
-                  key={item}
-                  className={`category ${category === item ? "active" : ""}`}
-                  onPress={() => setCategory(item)}
-                >
-                  {item}
-                </Button>
-              ))}
-            </nav>
 
             <div className="product-grid" aria-busy={productsQuery.isFetching}>
               {productsQuery.isLoading && (
@@ -485,20 +555,17 @@ export default function App() {
                 )}
               {visibleProducts.map((product) => {
                 const selected = product.id === selectedProductId;
-                const productCategory = categoryOf(product.nome);
                 return (
                   <Button
                     key={product.id}
                     className={`product-card ${selected ? "selected" : ""}`}
                     onPress={() => {
                       setSelectedProductId(product.id);
-                      setDisplay("0");
+                      setQuantityInput("1");
                       setStatus("");
                     }}
                   >
-                    <span className="product-mark">
-                      {shortCategory(productCategory)}
-                    </span>
+                    <span className="product-mark">DF</span>
                     <strong>{product.nome}</strong>
                     <small>
                       {money.format(product.preco_padrao)}/{product.unidade}
@@ -506,6 +573,28 @@ export default function App() {
                   </Button>
                 );
               })}
+            </div>
+            <div className="desktop-add-bar">
+              <div>
+                <span>Produto selecionado</span>
+                <strong>{selectedProduct?.nome ?? "Selecione um frio"}</strong>
+              </div>
+              <label>
+                <span>Quantidade / peso</span>
+                <input
+                  value={quantityInput}
+                  onChange={(e) => setQuantityInput(e.target.value)}
+                  inputMode="decimal"
+                  aria-label="Quantidade ou peso"
+                />
+              </label>
+              <Button
+                className="add-product-button"
+                isDisabled={!selectedProduct}
+                onPress={addSelected}
+              >
+                <Plus size={18} /> Adicionar
+              </Button>
             </div>
           </section>
 
@@ -555,86 +644,15 @@ export default function App() {
               </footer>
             </section>
 
-            <section className="keypad-zone">
-              <div className="selected-strip">
-                <span>PRODUTO SELECIONADO</span>
-                <strong>
-                  {selectedProduct?.nome ?? "Toque em um produto"}
-                </strong>
-                <small>
-                  {selectedProduct
-                    ? `${money.format(selectedProduct.preco_padrao)}/${selectedProduct.unidade}`
-                    : "Depois informe o peso/quantidade."}
-                </small>
-              </div>
-              <div className="display">
-                <span>PESO / QTD</span>
-                <strong>{display.replace(".", ",")}</strong>
-              </div>
-              <div className="keypad">
-                {["7", "8", "9"].map((n) => (
-                  <Button
-                    key={n}
-                    className="key"
-                    onPress={() => pressNumber(n)}
-                  >
-                    {n}
-                  </Button>
-                ))}
-                <Button className="key action teal" onPress={addSelected}>
-                  QTD
-                </Button>
-                {["4", "5", "6"].map((n) => (
-                  <Button
-                    key={n}
-                    className="key"
-                    onPress={() => pressNumber(n)}
-                  >
-                    {n}
-                  </Button>
-                ))}
-                <Button
-                  className="key action red"
-                  onPress={() => setDisplay("0")}
-                >
-                  LIMPAR
-                </Button>
-                {["1", "2", "3"].map((n) => (
-                  <Button
-                    key={n}
-                    className="key"
-                    onPress={() => pressNumber(n)}
-                  >
-                    {n}
-                  </Button>
-                ))}
-                <Button
-                  className="pay-key"
-                  isDisabled={!cart.length}
-                  onPress={() => setPaymentOpen(true)}
-                >
-                  <CreditCard size={22} />
-                  <span>PAGAR</span>
-                  <small>{money.format(total)}</small>
-                </Button>
-                <Button className="key zero" onPress={() => pressNumber("0")}>
-                  0
-                </Button>
-                <Button className="key" onPress={() => pressNumber(".")}>
-                  .
-                </Button>
-                <Button
-                  className="key action dark"
-                  onPress={() =>
-                    setDisplay((current) =>
-                      current.length > 1 ? current.slice(0, -1) : "0",
-                    )
-                  }
-                  aria-label="Apagar último número"
-                >
-                  ⌫
-                </Button>
-              </div>
+            <section className="checkout-actions">
+              <Button
+                className="desktop-pay-button"
+                isDisabled={!cart.length}
+                onPress={() => setPaymentOpen(true)}
+              >
+                <CreditCard size={20} /> Finalizar venda{" "}
+                <strong>{money.format(total)}</strong>
+              </Button>
               <div className="status-line" role="status">
                 {status}
               </div>
