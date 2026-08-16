@@ -2,19 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "react-aria-components";
-import {
-  ArrowLeft,
-  CreditCard,
-  Search,
-  Settings,
-  Trash2,
-  X,
-} from "lucide-react";
+import { CreditCard, Search, Trash2, X } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "./lib/supabase";
 import { SaleSchema, type CartItem } from "./schemas";
 import { PrintingSettings } from "./printing/PrintingSettings";
 import { enqueueReceipt, loadPrinting, makeReceipt } from "./printing/service";
+import { AppShell, type AppSection } from "./shell/AppShell";
+import { ComingSoon } from "./shell/ComingSoon";
+import { OrdersHome } from "./orders/OrdersHome";
 
 const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -91,8 +87,8 @@ function Login({ onSession }: { onSession: (session: Session) => void }) {
     <main className="login-screen">
       <form className="login-card" onSubmit={submit}>
         <span className="login-brand">DOM FRIOS</span>
-        <h1>Touch POS</h1>
-        <p>Entre para abrir o caixa.</p>
+        <h1>Gestão e PDV</h1>
+        <p>Entre para acessar a operação.</p>
         <label>
           E-mail
           <input
@@ -136,7 +132,7 @@ export default function App() {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("");
-  const [screen, setScreen] = useState<"pos" | "printing">("pos");
+  const [screen, setScreen] = useState<AppSection>("orders");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -188,13 +184,6 @@ export default function App() {
   if (session === undefined)
     return <div className="boot-screen">Carregando caixa...</div>;
   if (!session) return <Login onSession={setSession} />;
-  if (screen === "printing")
-    return (
-      <PrintingSettings
-        ownerId={session.user.id}
-        onBack={() => setScreen("pos")}
-      />
-    );
   const ownerId = session.user.id;
 
   function pressNumber(value: string) {
@@ -386,257 +375,312 @@ export default function App() {
     }
   }
 
-  return (
-    <div className="pos-shell">
-      <header className="topbar">
-        <div className="brand">
-          <strong>DOM FRIOS</strong>
-          <span>TOUCH POS V2</span>
-        </div>
-        <div className="top-actions">
-          <span>{session.user.email}</span>
-          <Button className="ghost-top" onPress={() => setScreen("printing")}>
-            <Settings size={16} /> Configurações
-          </Button>
-          <Button className="ghost-top" onPress={() => supabase.auth.signOut()}>
-            <ArrowLeft size={16} /> Sair
-          </Button>
-        </div>
-      </header>
-
-      <main className="pos-layout">
-        <section className="catalog">
-          <div className="customer-row">
-            <label>
-              <span>Cliente</span>
-              <input
-                value={customer}
-                onChange={(e) => setCustomer(e.target.value)}
-                placeholder="Venda rápida / nome do cliente"
-              />
-            </label>
-            <label>
-              <span>Pesquisar produto</span>
-              <div className="search-input">
-                <Search size={18} />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Digite o nome..."
-                />
-              </div>
-            </label>
-          </div>
-
-          <nav className="categories" aria-label="Categorias">
-            {categories.map((item) => (
-              <Button
-                key={item}
-                className={`category ${category === item ? "active" : ""}`}
-                onPress={() => setCategory(item)}
-              >
-                {item}
-              </Button>
-            ))}
-          </nav>
-
-          <div className="product-grid" aria-busy={productsQuery.isFetching}>
-            {productsQuery.isLoading && (
-              <div className="state-card">Carregando produtos...</div>
-            )}
-            {productsQuery.isError && (
-              <div className="state-card error">
-                Falha ao carregar produtos. Toque em atualizar no navegador.
-              </div>
-            )}
-            {!productsQuery.isLoading &&
-              !productsQuery.isError &&
-              visibleProducts.length === 0 && (
-                <div className="state-card">Nenhum produto encontrado.</div>
-              )}
-            {visibleProducts.map((product) => {
-              const selected = product.id === selectedProductId;
-              const productCategory = categoryOf(product.nome);
-              return (
-                <Button
-                  key={product.id}
-                  className={`product-card ${selected ? "selected" : ""}`}
-                  onPress={() => {
-                    setSelectedProductId(product.id);
-                    setDisplay("0");
-                    setStatus("");
-                  }}
-                >
-                  <span className="product-mark">
-                    {shortCategory(productCategory)}
-                  </span>
-                  <strong>{product.nome}</strong>
-                  <small>
-                    {money.format(product.preco_padrao)}/{product.unidade}
-                  </small>
-                </Button>
-              );
-            })}
-          </div>
-        </section>
-
-        <aside className="checkout">
-          <section className="receipt">
-            <header className="receipt-header">
-              <div>
-                <span>COMANDA</span>
-                <strong>Detalhes da venda</strong>
-              </div>
-              <Button className="clear-button" onPress={clearSale}>
-                <Trash2 size={15} /> Limpar
-              </Button>
-            </header>
-            <div className="receipt-columns">
-              <span>Qtd</span>
-              <span>Produto</span>
-              <span>Total</span>
-              <span></span>
-            </div>
-            <div className="cart-list">
-              {cart.length === 0 && (
-                <div className="cart-empty">Nenhum item selecionado</div>
-              )}
-              {cart.map((item) => (
-                <div className="cart-row" key={item.productId}>
-                  <span>
-                    {item.quantity.toLocaleString("pt-BR", {
-                      maximumFractionDigits: 3,
-                    })}
-                  </span>
-                  <strong>{item.name}</strong>
-                  <b>{money.format(item.total)}</b>
-                  <Button
-                    className="remove-button"
-                    aria-label={`Remover ${item.name}`}
-                    onPress={() => removeItem(item.productId)}
-                  >
-                    <X size={17} />
-                  </Button>
-                </div>
-              ))}
-            </div>
-            <footer className="receipt-total">
-              <span>Total</span>
-              <strong>{money.format(total)}</strong>
-            </footer>
-          </section>
-
-          <section className="keypad-zone">
-            <div className="selected-strip">
-              <span>PRODUTO SELECIONADO</span>
-              <strong>{selectedProduct?.nome ?? "Toque em um produto"}</strong>
-              <small>
-                {selectedProduct
-                  ? `${money.format(selectedProduct.preco_padrao)}/${selectedProduct.unidade}`
-                  : "Depois informe o peso/quantidade."}
-              </small>
-            </div>
-            <div className="display">
-              <span>PESO / QTD</span>
-              <strong>{display.replace(".", ",")}</strong>
-            </div>
-            <div className="keypad">
-              {["7", "8", "9"].map((n) => (
-                <Button key={n} className="key" onPress={() => pressNumber(n)}>
-                  {n}
-                </Button>
-              ))}
-              <Button className="key action teal" onPress={addSelected}>
-                QTD
-              </Button>
-              {["4", "5", "6"].map((n) => (
-                <Button key={n} className="key" onPress={() => pressNumber(n)}>
-                  {n}
-                </Button>
-              ))}
-              <Button
-                className="key action red"
-                onPress={() => setDisplay("0")}
-              >
-                LIMPAR
-              </Button>
-              {["1", "2", "3"].map((n) => (
-                <Button key={n} className="key" onPress={() => pressNumber(n)}>
-                  {n}
-                </Button>
-              ))}
-              <Button
-                className="pay-key"
-                isDisabled={!cart.length}
-                onPress={() => setPaymentOpen(true)}
-              >
-                <CreditCard size={22} />
-                <span>PAGAR</span>
-                <small>{money.format(total)}</small>
-              </Button>
-              <Button className="key zero" onPress={() => pressNumber("0")}>
-                0
-              </Button>
-              <Button className="key" onPress={() => pressNumber(".")}>
-                .
-              </Button>
-              <Button
-                className="key action dark"
-                onPress={() =>
-                  setDisplay((current) =>
-                    current.length > 1 ? current.slice(0, -1) : "0",
-                  )
-                }
-                aria-label="Apagar último número"
-              >
-                ⌫
-              </Button>
-            </div>
-            <div className="status-line" role="status">
-              {status}
-            </div>
-          </section>
-        </aside>
-      </main>
-
-      <Dialog.Root
-        open={paymentOpen}
-        onOpenChange={(open) => !saving && setPaymentOpen(open)}
+  if (screen === "orders")
+    return (
+      <AppShell
+        active={screen}
+        email={session.user.email}
+        onNavigate={setScreen}
+        onSignOut={() => supabase.auth.signOut()}
       >
-        <Dialog.Portal>
-          <Dialog.Overlay className="dialog-overlay" />
-          <Dialog.Content className="dialog-card">
-            <div className="dialog-head">
-              <div>
-                <Dialog.Title>Finalizar venda</Dialog.Title>
-                <Dialog.Description>
-                  Escolha a forma de pagamento.
-                </Dialog.Description>
-              </div>
-              <Dialog.Close asChild>
-                <Button className="dialog-close" aria-label="Fechar">
-                  <X />
+        <OrdersHome ownerId={ownerId} onNewSale={() => setScreen("sale")} />
+      </AppShell>
+    );
+
+  if (screen === "printing")
+    return (
+      <AppShell
+        active={screen}
+        email={session.user.email}
+        onNavigate={setScreen}
+        onSignOut={() => supabase.auth.signOut()}
+      >
+        <PrintingSettings
+          ownerId={ownerId}
+          onBack={() => setScreen("system")}
+        />
+      </AppShell>
+    );
+
+  if (screen !== "sale") {
+    const titles: Partial<Record<AppSection, string>> = {
+      catalog: "Cardápio",
+      finance: "Financeiro",
+      delivery: "Entrega",
+      loyalty: "Fidelidade",
+      system: "Sistema",
+    };
+    return (
+      <AppShell
+        active={screen}
+        email={session.user.email}
+        onNavigate={setScreen}
+        onSignOut={() => supabase.auth.signOut()}
+      >
+        <ComingSoon
+          title={titles[screen] ?? "Módulo"}
+          onOpenSale={() => setScreen("sale")}
+        />
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell
+      active={screen}
+      email={session.user.email}
+      onNavigate={setScreen}
+      onSignOut={() => supabase.auth.signOut()}
+    >
+      <div className="pos-shell">
+        <main className="pos-layout">
+          <section className="catalog">
+            <div className="customer-row">
+              <label>
+                <span>Cliente</span>
+                <input
+                  value={customer}
+                  onChange={(e) => setCustomer(e.target.value)}
+                  placeholder="Venda rápida / nome do cliente"
+                />
+              </label>
+              <label>
+                <span>Pesquisar produto</span>
+                <div className="search-input">
+                  <Search size={18} />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Digite o nome..."
+                  />
+                </div>
+              </label>
+            </div>
+
+            <nav className="categories" aria-label="Categorias">
+              {categories.map((item) => (
+                <Button
+                  key={item}
+                  className={`category ${category === item ? "active" : ""}`}
+                  onPress={() => setCategory(item)}
+                >
+                  {item}
                 </Button>
-              </Dialog.Close>
-            </div>
-            <strong className="dialog-total">{money.format(total)}</strong>
-            <div className="payment-grid">
-              {(["Pix", "Dinheiro", "Cartão", "Prazo"] as Payment[]).map(
-                (method) => (
-                  <Button
-                    key={method}
-                    className="payment-button"
-                    isDisabled={saving}
-                    onPress={() => finalize(method)}
-                  >
-                    {saving ? "Salvando..." : method}
-                  </Button>
-                ),
+              ))}
+            </nav>
+
+            <div className="product-grid" aria-busy={productsQuery.isFetching}>
+              {productsQuery.isLoading && (
+                <div className="state-card">Carregando produtos...</div>
               )}
+              {productsQuery.isError && (
+                <div className="state-card error">
+                  Falha ao carregar produtos. Toque em atualizar no navegador.
+                </div>
+              )}
+              {!productsQuery.isLoading &&
+                !productsQuery.isError &&
+                visibleProducts.length === 0 && (
+                  <div className="state-card">Nenhum produto encontrado.</div>
+                )}
+              {visibleProducts.map((product) => {
+                const selected = product.id === selectedProductId;
+                const productCategory = categoryOf(product.nome);
+                return (
+                  <Button
+                    key={product.id}
+                    className={`product-card ${selected ? "selected" : ""}`}
+                    onPress={() => {
+                      setSelectedProductId(product.id);
+                      setDisplay("0");
+                      setStatus("");
+                    }}
+                  >
+                    <span className="product-mark">
+                      {shortCategory(productCategory)}
+                    </span>
+                    <strong>{product.nome}</strong>
+                    <small>
+                      {money.format(product.preco_padrao)}/{product.unidade}
+                    </small>
+                  </Button>
+                );
+              })}
             </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    </div>
+          </section>
+
+          <aside className="checkout">
+            <section className="receipt">
+              <header className="receipt-header">
+                <div>
+                  <span>COMANDA</span>
+                  <strong>Detalhes da venda</strong>
+                </div>
+                <Button className="clear-button" onPress={clearSale}>
+                  <Trash2 size={15} /> Limpar
+                </Button>
+              </header>
+              <div className="receipt-columns">
+                <span>Qtd</span>
+                <span>Produto</span>
+                <span>Total</span>
+                <span></span>
+              </div>
+              <div className="cart-list">
+                {cart.length === 0 && (
+                  <div className="cart-empty">Nenhum item selecionado</div>
+                )}
+                {cart.map((item) => (
+                  <div className="cart-row" key={item.productId}>
+                    <span>
+                      {item.quantity.toLocaleString("pt-BR", {
+                        maximumFractionDigits: 3,
+                      })}
+                    </span>
+                    <strong>{item.name}</strong>
+                    <b>{money.format(item.total)}</b>
+                    <Button
+                      className="remove-button"
+                      aria-label={`Remover ${item.name}`}
+                      onPress={() => removeItem(item.productId)}
+                    >
+                      <X size={17} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              <footer className="receipt-total">
+                <span>Total</span>
+                <strong>{money.format(total)}</strong>
+              </footer>
+            </section>
+
+            <section className="keypad-zone">
+              <div className="selected-strip">
+                <span>PRODUTO SELECIONADO</span>
+                <strong>
+                  {selectedProduct?.nome ?? "Toque em um produto"}
+                </strong>
+                <small>
+                  {selectedProduct
+                    ? `${money.format(selectedProduct.preco_padrao)}/${selectedProduct.unidade}`
+                    : "Depois informe o peso/quantidade."}
+                </small>
+              </div>
+              <div className="display">
+                <span>PESO / QTD</span>
+                <strong>{display.replace(".", ",")}</strong>
+              </div>
+              <div className="keypad">
+                {["7", "8", "9"].map((n) => (
+                  <Button
+                    key={n}
+                    className="key"
+                    onPress={() => pressNumber(n)}
+                  >
+                    {n}
+                  </Button>
+                ))}
+                <Button className="key action teal" onPress={addSelected}>
+                  QTD
+                </Button>
+                {["4", "5", "6"].map((n) => (
+                  <Button
+                    key={n}
+                    className="key"
+                    onPress={() => pressNumber(n)}
+                  >
+                    {n}
+                  </Button>
+                ))}
+                <Button
+                  className="key action red"
+                  onPress={() => setDisplay("0")}
+                >
+                  LIMPAR
+                </Button>
+                {["1", "2", "3"].map((n) => (
+                  <Button
+                    key={n}
+                    className="key"
+                    onPress={() => pressNumber(n)}
+                  >
+                    {n}
+                  </Button>
+                ))}
+                <Button
+                  className="pay-key"
+                  isDisabled={!cart.length}
+                  onPress={() => setPaymentOpen(true)}
+                >
+                  <CreditCard size={22} />
+                  <span>PAGAR</span>
+                  <small>{money.format(total)}</small>
+                </Button>
+                <Button className="key zero" onPress={() => pressNumber("0")}>
+                  0
+                </Button>
+                <Button className="key" onPress={() => pressNumber(".")}>
+                  .
+                </Button>
+                <Button
+                  className="key action dark"
+                  onPress={() =>
+                    setDisplay((current) =>
+                      current.length > 1 ? current.slice(0, -1) : "0",
+                    )
+                  }
+                  aria-label="Apagar último número"
+                >
+                  ⌫
+                </Button>
+              </div>
+              <div className="status-line" role="status">
+                {status}
+              </div>
+            </section>
+          </aside>
+        </main>
+
+        <Dialog.Root
+          open={paymentOpen}
+          onOpenChange={(open) => !saving && setPaymentOpen(open)}
+        >
+          <Dialog.Portal>
+            <Dialog.Overlay className="dialog-overlay" />
+            <Dialog.Content className="dialog-card">
+              <div className="dialog-head">
+                <div>
+                  <Dialog.Title>Finalizar venda</Dialog.Title>
+                  <Dialog.Description>
+                    Escolha a forma de pagamento.
+                  </Dialog.Description>
+                </div>
+                <Dialog.Close asChild>
+                  <Button className="dialog-close" aria-label="Fechar">
+                    <X />
+                  </Button>
+                </Dialog.Close>
+              </div>
+              <strong className="dialog-total">{money.format(total)}</strong>
+              <div className="payment-grid">
+                {(["Pix", "Dinheiro", "Cartão", "Prazo"] as Payment[]).map(
+                  (method) => (
+                    <Button
+                      key={method}
+                      className="payment-button"
+                      isDisabled={saving}
+                      onPress={() => finalize(method)}
+                    >
+                      {saving ? "Salvando..." : method}
+                    </Button>
+                  ),
+                )}
+              </div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      </div>
+    </AppShell>
   );
 }
