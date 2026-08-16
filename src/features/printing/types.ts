@@ -48,8 +48,21 @@ export type PrinterRecord = {
   destinations: PrinterDestination[];
 };
 
-export type PrinterDraft = Omit<PrinterRecord, 'id' | 'status' | 'status_message' | 'last_seen_at'> & {
+export type PrinterDraft = {
   id?: string;
+  friendly_name: string;
+  model?: string | null;
+  paper_width: 58 | 80;
+  connection_mode: PrinterConnectionMode;
+  system_queue?: string | null;
+  ip?: string | null;
+  port?: number | null;
+  timeout_ms: number;
+  retry_count: number;
+  cut_type: CutType;
+  feed_lines: number;
+  enabled: boolean;
+  destinations: PrinterDestination[];
 };
 
 export type ReceiptLine = {
