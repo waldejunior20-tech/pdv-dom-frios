@@ -56,8 +56,9 @@ export function probePrinter(accessToken: string, printer: PrinterDraft | Printe
 }
 
 export function executePrintJob(accessToken: string, jobId: string) {
-  return agentRequest<{ state: 'completed' | 'failed'; message: string }>(`/v1/jobs/${jobId}/execute`, accessToken, {
-    method: 'POST',
-    body: '{}',
-  });
+  return agentRequest<{ state: 'completed' | 'failed' | 'processing'; message: string }>(
+    `/v1/jobs/${jobId}/execute`,
+    accessToken,
+    { method: 'POST', body: '{}' },
+  );
 }
