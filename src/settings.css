@@ -161,7 +161,7 @@
 }
 .printer-row {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto 44px;
+  grid-template-columns: 52px minmax(0, 1fr) auto auto 44px;
   gap: 12px;
   align-items: center;
   border: 1px solid #dce0e2;
@@ -229,6 +229,39 @@
   padding: 12px 2px;
   color: var(--teal-dark);
   font-weight: 700;
+}
+.job-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+.job-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  border-bottom: 1px solid #e3e6e7;
+  padding: 10px 0;
+}
+.job-row > div {
+  display: grid;
+  gap: 3px;
+}
+.job-row span,
+.job-row small {
+  font-size: 11px;
+  color: #6d757a;
+}
+.job-row small {
+  color: #ad3038;
+}
+.status-badge.completed {
+  background: #e4f4e2;
+  color: #26741c;
+}
+.status-badge.failed {
+  background: #fee8e9;
+  color: #ac2b34;
 }
 .settings-page > p {
   padding: 40px;

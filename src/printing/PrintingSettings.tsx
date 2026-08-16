@@ -9,7 +9,10 @@ import {
   Wifi,
 } from "lucide-react";
 import {
+  enqueueTest,
+  loadPrintJobs,
   loadPrinting,
+  requeueJob,
   removePrinter,
   savePrinter,
   saveSettings,
@@ -36,13 +39,15 @@ export function PrintingSettings({
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [message, setMessage] = useState("Carregando configuração...");
   const [editing, setEditing] = useState(false);
+  const [jobs, setJobs] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
-    loadPrinting(ownerId)
-      .then((data) => {
+    Promise.all([loadPrinting(ownerId), loadPrintJobs()])
+      .then(([data, recentJobs]) => {
         setSettings(data.settings);
         setPrinters(data.printers);
         setMessage("");
+        setJobs(recentJobs);
       })
       .catch((error: Error) => setMessage(error.message));
   }, [ownerId]);
@@ -98,6 +103,22 @@ export function PrintingSettings({
     if (!window.confirm("Remover esta impressora?")) return;
     await removePrinter(id);
     setPrinters((rows) => rows.filter((p) => p.id !== id));
+  }
+  async function test(printer: Printer) {
+    setMessage("Teste adicionado à fila...");
+    await enqueueTest(ownerId, printer, currentSettings);
+    setJobs(await loadPrintJobs());
+    setMessage("Teste enviado à fila.");
+  }
+  async function reprint(job: Record<string, unknown>) {
+    if (
+      currentSettings.confirm_reprint &&
+      !window.confirm("Este pedido já foi impresso. Reimprimir?")
+    )
+      return;
+    await requeueJob(ownerId, job);
+    setJobs(await loadPrintJobs());
+    setMessage("Reimpressão adicionada à fila.");
   }
 
   return (
@@ -269,6 +290,12 @@ export function PrintingSettings({
                   {statusLabels[printer.status]}
                 </span>
                 <Button
+                  className="outline-button"
+                  onPress={() => test(printer)}
+                >
+                  Teste
+                </Button>
+                <Button
                   className="remove-button"
                   aria-label="Remover impressora"
                   onPress={() => drop(printer.id)}
@@ -297,6 +324,42 @@ export function PrintingSettings({
               </Button>
             </div>
           )}
+        </section>
+        <section className="settings-card">
+          <div className="card-title">
+            <div>
+              <h2>Histórico de impressão</h2>
+              <p>Últimos 20 trabalhos e reimpressões.</p>
+            </div>
+          </div>
+          <div className="job-list">
+            {jobs.length === 0 && <p>Nenhuma impressão registrada.</p>}
+            {jobs.map((job) => (
+              <div className="job-row" key={String(job.id)}>
+                <div>
+                  <b>
+                    {String(
+                      (job.receipt_payload as { customer?: string })
+                        ?.customer || "Pedido",
+                    )}
+                  </b>
+                  <span>
+                    {new Date(String(job.created_at)).toLocaleString("pt-BR")} ·{" "}
+                    {String(job.origin)}
+                  </span>
+                  {job.last_error ? (
+                    <small>{String(job.last_error)}</small>
+                  ) : null}
+                </div>
+                <span className={`status-badge ${String(job.state)}`}>
+                  {String(job.state)}
+                </span>
+                <Button className="outline-button" onPress={() => reprint(job)}>
+                  Reimprimir
+                </Button>
+              </div>
+            ))}
+          </div>
         </section>
         <div className="settings-message" role="status">
           {message}

@@ -27,7 +27,7 @@ describe("printing service", () => {
           total: 20,
         },
       ],
-      "complete",
+      defaultSettings("owner"),
     );
     expect(receipt.total).toBe(20);
   });

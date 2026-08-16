@@ -320,27 +320,33 @@ export default function App() {
         (sum, item) => sum + item.discount,
         0,
       );
-      const { error: saleError } = await supabase.from("vendas").insert({
-        id: saleId,
-        cliente_nome: parsed.data.customer,
-        subtotal,
-        desconto: discount,
-        taxa: 0,
-        forma_pagamento: paymentToDb[payment],
-        situacao_pagamento: "confirmado",
-        status: "aprovado",
-        observacao: "Venda Touch POS V2",
+      const printing = await loadPrinting(ownerId);
+      const saleStatus = printing.settings.auto_approve
+        ? "aprovado"
+        : "recebido";
+      const { error } = await supabase.rpc("finalize_sale", {
+        p_sale: {
+          id: saleId,
+          cliente_nome: parsed.data.customer,
+          subtotal,
+          desconto: discount,
+          taxa: 0,
+          forma_pagamento: paymentToDb[payment],
+          situacao_pagamento: "confirmado",
+          status: saleStatus,
+          observacao: "Venda Touch POS V2",
+        },
+        p_items: rows,
       });
-      if (saleError && saleError.code !== "23505") throw saleError;
-      const { error } = await supabase.from("pedidos").insert(rows);
       if (error && !(error.code === "23505" && (await alreadySaved())))
         throw error;
       try {
-        const printing = await loadPrinting(ownerId);
-        if (
-          printing.settings.auto_print &&
-          printing.settings.print_when !== "manual"
-        )
+        const eventMatches =
+          printing.settings.print_when === "received" ||
+          (printing.settings.print_when === "approved" &&
+            saleStatus === "aprovado") ||
+          printing.settings.print_when === "payment_confirmed";
+        if (printing.settings.auto_print && eventMatches)
           await enqueueReceipt(
             ownerId,
             saleId,
@@ -349,7 +355,7 @@ export default function App() {
               parsed.data.customer,
               payment,
               parsed.data.items,
-              printing.settings.receipt_mode,
+              printing.settings,
             ),
             printing.settings,
             printing.printers,

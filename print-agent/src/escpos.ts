@@ -5,6 +5,7 @@ type Receipt = {
   createdAt: string;
   total: number;
   mode: "complete" | "summary";
+  printOptions?: { cutType: "partial" | "full" | "none"; feedLines: number };
   items: Array<{
     name: string;
     quantity: number;

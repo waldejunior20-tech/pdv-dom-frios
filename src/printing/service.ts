@@ -70,19 +70,83 @@ export async function removePrinter(id: string) {
   if (error) throw error;
 }
 
+export async function loadPrintJobs() {
+  const { data, error } = await supabase
+    .from("print_jobs")
+    .select(
+      "id,state,origin,created_at,last_error,printer_id,receipt_payload,copies,max_attempts,retry_interval_ms,venda_id",
+    )
+    .order("created_at", { ascending: false })
+    .limit(20);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function requeueJob(
+  ownerId: string,
+  job: Record<string, unknown>,
+) {
+  const { error } = await supabase.from("print_jobs").insert({
+    owner_id: ownerId,
+    venda_id: job.venda_id,
+    printer_id: job.printer_id,
+    idempotency_key: `manual:${crypto.randomUUID()}:${job.printer_id}`,
+    origin: "manual",
+    state: "pending",
+    receipt_payload: job.receipt_payload,
+    copies: job.copies,
+    max_attempts: job.max_attempts,
+    retry_interval_ms: job.retry_interval_ms,
+  });
+  if (error) throw error;
+}
+
+export async function enqueueTest(
+  ownerId: string,
+  printer: Printer,
+  settings: PrintSettings,
+) {
+  const payload: ReceiptPayload = {
+    saleId: crypto.randomUUID(),
+    customer: "TESTE DE IMPRESSÃO",
+    payment: "—",
+    createdAt: new Date().toISOString(),
+    total: 0,
+    mode: settings.receipt_mode,
+    printOptions: {
+      cutType: settings.auto_cut ? settings.cut_type : "none",
+      feedLines: settings.feed_lines,
+    },
+    items: [
+      {
+        name: "GS-T80E configurada com sucesso",
+        quantity: 1,
+        unit: "un",
+        unitPrice: 0,
+        total: 0,
+      },
+    ],
+  };
+  return enqueueReceipt(ownerId, null, payload, settings, [printer], "test");
+}
+
 export function makeReceipt(
   saleId: string,
   customer: string,
   payment: string,
   items: CartItem[],
-  mode: PrintSettings["receipt_mode"],
+  settings: PrintSettings,
 ): ReceiptPayload {
   return {
     saleId,
     customer,
     payment,
     createdAt: new Date().toISOString(),
-    mode,
+    mode: settings.receipt_mode,
+    printOptions: {
+      cutType: settings.auto_cut ? settings.cut_type : "none",
+      feedLines: settings.feed_lines,
+    },
     total: items.reduce((sum, item) => sum + item.total, 0),
     items: items.map(({ name, quantity, unit, unitPrice, total }) => ({
       name,
@@ -117,7 +181,13 @@ export async function enqueueReceipt(
     max_attempts: printer.retry_count + 1,
     retry_interval_ms: 1500,
   }));
-  const { error } = await supabase.from("print_jobs").insert(rows);
-  if (error && error.code !== "23505") throw error;
-  return active.length;
+  const { data, error } = await supabase
+    .from("print_jobs")
+    .upsert(rows, {
+      onConflict: "owner_id,idempotency_key",
+      ignoreDuplicates: true,
+    })
+    .select("id");
+  if (error) throw error;
+  return data?.length ?? 0;
 }

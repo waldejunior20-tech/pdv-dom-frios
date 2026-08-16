@@ -29,7 +29,7 @@ async function poll() {
     const { data: jobs, error } = await supabase
       .from("print_jobs")
       .select("*,printers(*)")
-      .in("state", ["pending", "failed"])
+      .eq("state", "pending")
       .or(
         `next_attempt_at.is.null,next_attempt_at.lte.${new Date().toISOString()}`,
       )
@@ -44,25 +44,23 @@ async function poll() {
         cut_type: "partial" | "full" | "none";
         feed_lines: number;
       };
-      const { data: claimed, error: claimError } = await supabase
-        .from("print_jobs")
-        .update({
-          state: "processing",
-          attempt_count: job.attempt_count + 1,
-          started_at: new Date().toISOString(),
-        })
-        .eq("id", job.id)
-        .eq("state", job.state)
-        .select("id")
-        .maybeSingle();
+      const { data: claimed, error: claimError } = await supabase.rpc(
+        "claim_print_job",
+        { p_job_id: job.id },
+      );
       if (claimError) throw claimError;
       if (!claimed) continue;
+      await supabase
+        .from("print_jobs")
+        .update({ attempt_count: job.attempt_count + 1 })
+        .eq("id", job.id);
       const started = Date.now();
       try {
+        const options = job.receipt_payload.printOptions;
         const bytes = receiptToEscPos(
           job.receipt_payload,
-          printer.cut_type,
-          printer.feed_lines,
+          options?.cutType ?? printer.cut_type,
+          options?.feedLines ?? printer.feed_lines,
           printer.paper_width,
         );
         for (let copy = 0; copy < job.copies; copy++)
@@ -117,7 +115,7 @@ async function poll() {
           job_id: job.id,
           printer_id: printer.id,
           attempt_no: job.attempt_count + 1,
-          state: "failed",
+          state: exhausted ? "failed" : "pending",
           agent_os: process.platform,
           agent_version: "0.1.0",
           result_code: "print_error",

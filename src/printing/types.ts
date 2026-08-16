@@ -50,6 +50,7 @@ export type ReceiptPayload = {
   createdAt: string;
   total: number;
   mode: "complete" | "summary";
+  printOptions: { cutType: CutType; feedLines: number };
   items: Array<{
     name: string;
     quantity: number;
