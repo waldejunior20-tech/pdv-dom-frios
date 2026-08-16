@@ -8,8 +8,15 @@ function command(...bytes: number[]) {
   return Buffer.from(bytes);
 }
 
+function sanitize(value: string) {
+  return Array.from(value, (character) => {
+    const code = character.codePointAt(0) ?? 32;
+    return code < 32 || code === 127 ? ' ' : character;
+  }).join('');
+}
+
 function text(value: string) {
-  return iconv.encode(value.replace(/[\u0000-\u001f\u007f]/g, ' '), 'cp850');
+  return iconv.encode(sanitize(value), 'cp850');
 }
 
 export function buildEscPos(payload: ReceiptPayload) {
