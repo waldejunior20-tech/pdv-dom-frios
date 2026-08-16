@@ -31,4 +31,8 @@ npm run dev
 npm run build
 ```
 
+## Impressão térmica
+
+O módulo inclui Configurações → Impressão, fila/histórico no Supabase e um agente local Node/TypeScript com CUPS e ESC/POS TCP. Consulte [docs/IMPRESSAO.md](docs/IMPRESSAO.md) para instalar e operar a GS-T80E.
+
 A branch `main` representa produção e `develop` é usada para desenvolvimento.
