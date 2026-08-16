@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "react-aria-components";
 import {
   ArrowLeft,
@@ -7,6 +8,7 @@ import {
   Save,
   Trash2,
   Wifi,
+  X,
 } from "lucide-react";
 import {
   enqueueTest,
@@ -39,6 +41,16 @@ export function PrintingSettings({
   const [printers, setPrinters] = useState<Printer[]>([]);
   const [message, setMessage] = useState("Carregando configuração...");
   const [editing, setEditing] = useState(false);
+  const [savingPrinter, setSavingPrinter] = useState(false);
+  const [printerDraft, setPrinterDraft] = useState({
+    friendly_name: "Impressora da cozinha",
+    model: "Goldensky GS-T80E",
+    connection_mode: "network" as "network" | "system",
+    system_queue: "GS_T80E",
+    ip: "192.168.18.100",
+    port: 9100,
+    paper_width: 80 as 58 | 80,
+  });
   const [jobs, setJobs] = useState<Record<string, unknown>[]>([]);
 
   useEffect(() => {
@@ -75,17 +87,24 @@ export function PrintingSettings({
       setMessage(error instanceof Error ? error.message : "Falha ao salvar.");
     }
   }
-  async function addGsPrinter() {
+  async function addPrinter() {
+    if (!printerDraft.friendly_name.trim())
+      return setMessage("Informe o nome amigável da impressora.");
     setMessage("Cadastrando impressora...");
+    setSavingPrinter(true);
     try {
       const printer = await savePrinter(ownerId, {
-        friendly_name: "Impressora da cozinha",
-        model: "Goldensky GS-T80E",
-        paper_width: 80,
-        connection_mode: "network",
-        system_queue: "GS_T80E",
-        ip: "192.168.18.100",
-        port: 9100,
+        friendly_name: printerDraft.friendly_name.trim(),
+        model: printerDraft.model.trim() || null,
+        paper_width: printerDraft.paper_width,
+        connection_mode: printerDraft.connection_mode,
+        system_queue: printerDraft.system_queue.trim() || null,
+        ip:
+          printerDraft.connection_mode === "network"
+            ? printerDraft.ip.trim()
+            : null,
+        port:
+          printerDraft.connection_mode === "network" ? printerDraft.port : null,
         cut_type: "partial",
         feed_lines: 3,
         enabled: true,
@@ -97,6 +116,8 @@ export function PrintingSettings({
       setMessage(
         error instanceof Error ? error.message : "Falha ao cadastrar.",
       );
+    } finally {
+      setSavingPrinter(false);
     }
   }
   async function drop(id: string) {
@@ -305,25 +326,6 @@ export function PrintingSettings({
               </article>
             ))}
           </div>
-          {editing && (
-            <div className="quick-add">
-              <div>
-                <b>Goldensky GS-T80E</b>
-                <span>
-                  LAN 192.168.18.100:9100 · fila GS_T80E · 80 mm · corte parcial
-                </span>
-              </div>
-              <Button className="save-button" onPress={addGsPrinter}>
-                Cadastrar padrão
-              </Button>
-              <Button
-                className="outline-button"
-                onPress={() => setEditing(false)}
-              >
-                Cancelar
-              </Button>
-            </div>
-          )}
         </section>
         <section className="settings-card">
           <div className="card-title">
@@ -365,6 +367,146 @@ export function PrintingSettings({
           {message}
         </div>
       </main>
+      <Dialog.Root
+        open={editing}
+        onOpenChange={(open) => !savingPrinter && setEditing(open)}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="dialog-overlay" />
+          <Dialog.Content
+            className="printer-dialog"
+            aria-describedby="printer-dialog-description"
+          >
+            <div className="dialog-head">
+              <div>
+                <Dialog.Title>Adicionar impressora</Dialog.Title>
+                <Dialog.Description id="printer-dialog-description">
+                  Revise os dados da GS-T80E ou cadastre outra impressora.
+                </Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <Button className="dialog-close" aria-label="Fechar">
+                  <X />
+                </Button>
+              </Dialog.Close>
+            </div>
+            <div className="printer-form">
+              <label className="field">
+                Nome amigável
+                <input
+                  autoFocus
+                  value={printerDraft.friendly_name}
+                  onChange={(e) =>
+                    setPrinterDraft((draft) => ({
+                      ...draft,
+                      friendly_name: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                Modelo
+                <input
+                  value={printerDraft.model}
+                  onChange={(e) =>
+                    setPrinterDraft((draft) => ({
+                      ...draft,
+                      model: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                Conexão
+                <select
+                  value={printerDraft.connection_mode}
+                  onChange={(e) =>
+                    setPrinterDraft((draft) => ({
+                      ...draft,
+                      connection_mode: e.target.value as "network" | "system",
+                    }))
+                  }
+                >
+                  <option value="network">Rede LAN</option>
+                  <option value="system">Fila do sistema/CUPS</option>
+                </select>
+              </label>
+              <label className="field">
+                Largura do papel
+                <select
+                  value={printerDraft.paper_width}
+                  onChange={(e) =>
+                    setPrinterDraft((draft) => ({
+                      ...draft,
+                      paper_width: Number(e.target.value) as 58 | 80,
+                    }))
+                  }
+                >
+                  <option value="80">80 mm</option>
+                  <option value="58">58 mm</option>
+                </select>
+              </label>
+              {printerDraft.connection_mode === "network" && (
+                <>
+                  <label className="field">
+                    Endereço IP
+                    <input
+                      value={printerDraft.ip}
+                      onChange={(e) =>
+                        setPrinterDraft((draft) => ({
+                          ...draft,
+                          ip: e.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    Porta
+                    <input
+                      type="number"
+                      min="1"
+                      max="65535"
+                      value={printerDraft.port}
+                      onChange={(e) =>
+                        setPrinterDraft((draft) => ({
+                          ...draft,
+                          port: Number(e.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                </>
+              )}
+              <label className="field full-field">
+                Fila instalada no sistema
+                <input
+                  value={printerDraft.system_queue}
+                  onChange={(e) =>
+                    setPrinterDraft((draft) => ({
+                      ...draft,
+                      system_queue: e.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <div className="dialog-actions">
+              <Dialog.Close asChild>
+                <Button className="outline-button" isDisabled={savingPrinter}>
+                  Cancelar
+                </Button>
+              </Dialog.Close>
+              <Button
+                className="save-button"
+                isDisabled={savingPrinter}
+                onPress={addPrinter}
+              >
+                {savingPrinter ? "Cadastrando..." : "Cadastrar impressora"}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

@@ -224,6 +224,38 @@
   font-size: 12px;
   color: #657075;
 }
+.printer-dialog {
+  position: fixed;
+  z-index: 101;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(620px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #ccd2d5;
+  border-radius: 5px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+  padding: 20px;
+}
+.printer-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 18px;
+}
+.printer-form .full-field {
+  grid-column: 1/-1;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e1e4e5;
+}
 .settings-message {
   min-height: 30px;
   padding: 12px 2px;
@@ -290,5 +322,11 @@
   .quick-add {
     align-items: stretch;
     flex-direction: column;
+  }
+  .printer-form {
+    grid-template-columns: 1fr;
+  }
+  .printer-form .full-field {
+    grid-column: auto;
   }
 }

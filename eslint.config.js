@@ -4,7 +4,7 @@ import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist", "print-agent/dist"] },
+  { ignores: ["dist", "print-agent/dist", ".vercel"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
