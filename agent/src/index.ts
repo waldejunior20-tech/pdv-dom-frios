@@ -60,10 +60,6 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
 
-  if (req.url === '/v1/health' && req.method === 'GET') {
-    return send(res, 200, { ok: true, data: { version: VERSION, os: `${os.platform()} ${os.release()}` } }, origin);
-  }
-
   if (!isOriginAllowed(origin)) {
     return send(
       res,
@@ -71,6 +67,10 @@ const server = http.createServer(async (req, res) => {
       { ok: false, error: { code: 'ORIGIN_DENIED', message: 'Este site não está autorizado a usar o agente local.' } },
       origin,
     );
+  }
+
+  if (req.url === '/v1/health' && req.method === 'GET') {
+    return send(res, 200, { ok: true, data: { version: VERSION, os: `${os.platform()} ${os.release()}` } }, origin);
   }
 
   const token = bearer(req);
