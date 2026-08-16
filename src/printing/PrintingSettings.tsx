@@ -11,7 +11,9 @@ import {
   X,
 } from "lucide-react";
 import {
+  addDiscoveredPrinter,
   enqueueTest,
+  loadDiscoveredPrinters,
   loadPrintJobs,
   loadPrinting,
   requeueJob,
@@ -19,7 +21,7 @@ import {
   savePrinter,
   saveSettings,
 } from "./service";
-import type { PrintSettings, Printer } from "./types";
+import type { DiscoveredPrinterQueue, PrintSettings, Printer } from "./types";
 
 const statusLabels = {
   available: "Disponível",
@@ -52,14 +54,20 @@ export function PrintingSettings({
     paper_width: 80 as 58 | 80,
   });
   const [jobs, setJobs] = useState<Record<string, unknown>[]>([]);
+  const [discovered, setDiscovered] = useState<DiscoveredPrinterQueue[]>([]);
 
   useEffect(() => {
-    Promise.all([loadPrinting(ownerId), loadPrintJobs()])
-      .then(([data, recentJobs]) => {
+    Promise.all([
+      loadPrinting(ownerId),
+      loadPrintJobs(),
+      loadDiscoveredPrinters(),
+    ])
+      .then(([data, recentJobs, queues]) => {
         setSettings(data.settings);
         setPrinters(data.printers);
         setMessage("");
         setJobs(recentJobs);
+        setDiscovered(queues);
       })
       .catch((error: Error) => setMessage(error.message));
   }, [ownerId]);
@@ -85,6 +93,25 @@ export function PrintingSettings({
       setMessage("Configurações salvas.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao salvar.");
+    }
+  }
+  async function addFoundPrinter(queue: DiscoveredPrinterQueue) {
+    setSavingPrinter(true);
+    setMessage(`Adicionando ${queue.display_name}...`);
+    try {
+      const printer = await addDiscoveredPrinter(ownerId, queue);
+      setPrinters((rows) => [...rows, printer]);
+      setDiscovered((rows) => rows.filter((row) => row.id !== queue.id));
+      setEditing(false);
+      setMessage(`${queue.display_name} adicionada.`);
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Falha ao adicionar impressora encontrada.",
+      );
+    } finally {
+      setSavingPrinter(false);
     }
   }
   async function addPrinter() {
@@ -381,7 +408,8 @@ export function PrintingSettings({
               <div>
                 <Dialog.Title>Adicionar impressora</Dialog.Title>
                 <Dialog.Description id="printer-dialog-description">
-                  Revise os dados da GS-T80E ou cadastre outra impressora.
+                  Escolha uma fila encontrada pelo agente ou cadastre
+                  manualmente.
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -390,6 +418,32 @@ export function PrintingSettings({
                 </Button>
               </Dialog.Close>
             </div>
+            {discovered.length > 0 && (
+              <section className="discovered-printers">
+                <h3>Instaladas nos computadores</h3>
+                <p>O agente encontrou estas filas prontas para uso.</p>
+                {discovered.map((queue) => (
+                  <div className="discovered-printer" key={queue.id}>
+                    <div>
+                      <b>{queue.display_name}</b>
+                      <span>
+                        {queue.print_agents.computer_name} ·{" "}
+                        {queue.driver_name || "Driver não informado"}
+                      </span>
+                      <small>{queue.device_uri || queue.queue_name}</small>
+                    </div>
+                    <Button
+                      className="outline-button"
+                      isDisabled={savingPrinter}
+                      onPress={() => addFoundPrinter(queue)}
+                    >
+                      Usar esta
+                    </Button>
+                  </div>
+                ))}
+              </section>
+            )}
+            <h3 className="manual-printer-title">Configuração manual</h3>
             <div className="printer-form">
               <label className="field">
                 Nome amigável

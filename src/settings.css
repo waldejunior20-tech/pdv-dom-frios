@@ -159,6 +159,42 @@
   gap: 9px;
   margin-top: 18px;
 }
+
+.discovered-printers {
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #cbd5d8;
+  border-radius: 10px;
+  background: #f3fbfa;
+}
+
+.discovered-printers h3,
+.manual-printer-title {
+  margin: 0 0 6px;
+}
+.discovered-printers > p {
+  margin: 0 0 12px;
+  color: #667176;
+}
+.discovered-printer {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-top: 1px solid #dbe5e6;
+}
+.discovered-printer div {
+  display: grid;
+  gap: 3px;
+}
+.discovered-printer span,
+.discovered-printer small {
+  color: #667176;
+}
+.manual-printer-title {
+  margin-top: 18px;
+}
 .printer-row {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr) auto auto 44px;

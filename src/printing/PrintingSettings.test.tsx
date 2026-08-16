@@ -14,6 +14,7 @@ vi.mock("./service", async (importOriginal) => {
       printers: [],
     })),
     loadPrintJobs: vi.fn(async () => []),
+    loadDiscoveredPrinters: vi.fn(async () => []),
   };
 });
 

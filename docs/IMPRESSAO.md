@@ -14,11 +14,11 @@ O PDV registra a venda em `vendas`, mantém os itens em `pedidos` e cria trabalh
 - Driver do Mac: POS-80 1.2
 - Opções CUPS: `DocCutType=1PartialCutDoc FeedCutAfterJobEnd=3Line`
 
-Cadastre o padrão em **Configurações → Impressão → Adicionar → Cadastrar padrão**. A conexão `network` envia ESC/POS diretamente pela LAN; a conexão `system` usa `lp -o raw` e a fila instalada.
+Com o agente ativo, abra **Configurações → Impressão → Adicionar** e escolha uma das filas encontradas. O cadastro manual continua disponível. A conexão `network` envia ESC/POS diretamente pela LAN; a conexão `system` usa a fila instalada no computador.
 
-## Instalação do agente no Mac
+## Instalação do agente no Mac, Windows ou Linux
 
-Requer Node.js 20 ou superior e a impressora já instalada quando for usado o adaptador CUPS.
+Requer Node.js 20 ou superior e a impressora já instalada no sistema operacional. No Mac/Linux, o agente consulta CUPS. No Windows, consulta o spooler com `Get-Printer` e `Get-PrinterPort`, sem instalar ou alterar drivers.
 
 ```bash
 cd print-agent
@@ -36,13 +36,17 @@ npm run build
 npm start
 ```
 
-O agente escuta somente em `127.0.0.1:17891`. Verifique com `curl http://127.0.0.1:17891/health`. Não exponha essa porta na rede.
+O agente escuta somente em `127.0.0.1:17891`. Verifique no navegador com `http://127.0.0.1:17891/health`. Não exponha essa porta na rede. A resposta informa quantas filas foram encontradas e eventual erro de descoberta.
+
+Cada instalação recebe um identificador local próprio. Por isso, uma loja pode ter três ou mais impressoras no mesmo computador e também computadores diferentes com nomes de fila distintos. O painel informa em qual computador cada fila está instalada e direciona o trabalho somente ao agente vinculado.
+
+Para dar um nome reconhecível ao computador, defina `AGENT_NAME`, por exemplo `PC-Cozinha` ou `Caixa-Windows`. A descoberta é refeita automaticamente a cada minuto. Filas que desaparecem são preservadas no histórico como não instaladas, em vez de apagadas.
 
 ## Operação e diagnóstico
 
 O agente tenta novamente conforme a configuração da impressora, grava cada tentativa em `print_attempts` e atualiza o status exibido no PDV. `Disponível` confirma o último envio; `Desconectada` indica falha de conexão. Sensores de papel/tampa dependem do retorno suportado pelo modelo/driver e permanecem como status desconhecido quando não houver telemetria.
 
-Para validar a rede: confirme que o Mac alcança `192.168.18.100:9100`. Para CUPS, confirme que `lpstat -p GS_T80E` lista a fila. O job mantém uma chave de idempotência por venda e impressora para evitar cópia automática duplicada.
+Para validar a rede: confirme que o computador alcança `192.168.18.100:9100`. No CUPS, confirme que `lpstat -p GS_T80E` lista a fila. No Windows, confirme que a impressora aparece em **Configurações → Bluetooth e dispositivos → Impressoras e scanners**. O job mantém chave de idempotência e vínculo com o agente correto para evitar impressão automática duplicada.
 
 ## Segurança
 

@@ -41,6 +41,37 @@ export type Printer = {
   status: PrinterStatus;
   status_message: string | null;
   last_seen_at: string | null;
+  printer_bindings?: Array<{
+    id: string;
+    agent_id: string;
+    enabled: boolean;
+    priority: number;
+  }>;
+};
+
+export type PrintAgent = {
+  id: string;
+  computer_name: string;
+  platform: "win32" | "darwin" | "linux";
+  status: "online" | "offline" | "revoked";
+  last_seen_at: string;
+};
+
+export type DiscoveredPrinterQueue = {
+  id: string;
+  agent_id: string;
+  queue_name: string;
+  display_name: string;
+  driver_name: string | null;
+  device_uri: string | null;
+  host: string | null;
+  port: number | null;
+  status: "available" | "disconnected" | "error" | "unknown";
+  is_default: boolean;
+  installed: boolean;
+  fingerprint_strength: "strong" | "weak";
+  print_agents: PrintAgent;
+  printer_bindings?: Array<{ id: string }>;
 };
 
 export type ReceiptPayload = {
