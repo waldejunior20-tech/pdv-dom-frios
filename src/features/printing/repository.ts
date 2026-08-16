@@ -23,6 +23,16 @@ export const defaultPrintSettings: PrintSettings = {
   feed_lines: 3,
 };
 
+function normalizeJob(job: Record<string, unknown>): PrintJobRecord {
+  return {
+    ...(job as unknown as PrintJobRecord),
+    copies: Number(job.copies),
+    attempt_count: Number(job.attempt_count),
+    max_attempts: Number(job.max_attempts),
+    retry_interval_ms: Number(job.retry_interval_ms),
+  };
+}
+
 export async function getPrintSettings(): Promise<PrintSettings> {
   const { data, error } = await supabase.from('print_settings').select('*').maybeSingle();
   if (error) throw error;
@@ -164,13 +174,28 @@ export async function listRecentSales(limit = 12) {
 export async function listRecentPrintJobs(limit = 30): Promise<PrintJobRecord[]> {
   const { data, error } = await supabase.from('print_jobs').select('*').order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
-  return (data ?? []).map((job) => ({
-    ...job,
-    copies: Number(job.copies),
-    attempt_count: Number(job.attempt_count),
-    max_attempts: Number(job.max_attempts),
-    retry_interval_ms: Number(job.retry_interval_ms),
-  })) as PrintJobRecord[];
+  return (data ?? []).map((job) => normalizeJob(job as unknown as Record<string, unknown>));
+}
+
+export async function listRecoverablePrintJobs(limit = 20): Promise<PrintJobRecord[]> {
+  const { data, error } = await supabase
+    .from('print_jobs')
+    .select('*')
+    .in('state', ['pending', 'processing'])
+    .order('created_at', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+
+  const now = Date.now();
+  const staleBefore = now - 5 * 60_000;
+  return (data ?? [])
+    .map((job) => normalizeJob(job as unknown as Record<string, unknown>))
+    .filter((job) => {
+      if (job.state === 'pending') {
+        return !job.next_attempt_at || new Date(job.next_attempt_at).getTime() <= now;
+      }
+      return new Date(job.updated_at).getTime() <= staleBefore;
+    });
 }
 
 export async function createPrintJob(params: {
@@ -194,7 +219,7 @@ export async function createPrintJob(params: {
     retry_interval_ms: params.retryIntervalMs ?? 1500,
   };
   const { data, error } = await supabase.from('print_jobs').insert(row).select('*').single();
-  if (!error) return data as PrintJobRecord;
+  if (!error) return normalizeJob(data as unknown as Record<string, unknown>);
   if (error.code !== '23505') throw error;
   const { data: existing, error: existingError } = await supabase
     .from('print_jobs')
@@ -202,7 +227,7 @@ export async function createPrintJob(params: {
     .eq('idempotency_key', params.idempotencyKey)
     .single();
   if (existingError) throw existingError;
-  return existing as PrintJobRecord;
+  return normalizeJob(existing as unknown as Record<string, unknown>);
 }
 
 export async function hasCompletedPrint(vendaId: string) {
