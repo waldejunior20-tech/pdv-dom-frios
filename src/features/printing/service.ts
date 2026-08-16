@@ -1,6 +1,12 @@
 import { executePrintJob } from './agentClient';
 import { generateReceipt, generateTestReceipt } from './receipt';
-import { createPrintJob, getPrintSettings, listPrinters, loadSalePrintData } from './repository';
+import {
+  createPrintJob,
+  getPrintSettings,
+  listPrinters,
+  listRecoverablePrintJobs,
+  loadSalePrintData,
+} from './repository';
 import { buildPrintIdempotencyKey, printEventForSale } from './rules';
 import type { PrintOrigin, PrinterRecord, SalePrintData } from './types';
 
@@ -73,6 +79,26 @@ export async function printSale(params: {
         ? 'Venda salva, mas uma impressão falhou.'
         : 'Venda salva e impressão processada.',
   };
+}
+
+export async function resumeRecoverablePrintJobs(accessToken: string) {
+  const jobs = await listRecoverablePrintJobs();
+  let completed = 0;
+  let processing = 0;
+  let failed = 0;
+
+  for (const job of jobs) {
+    try {
+      const result = await executePrintJob(accessToken, job.id);
+      if (result.state === 'completed') completed += 1;
+      else if (result.state === 'processing') processing += 1;
+      else failed += 1;
+    } catch {
+      processing += 1;
+    }
+  }
+
+  return { total: jobs.length, completed, processing, failed };
 }
 
 export async function maybeAutoPrintSale(vendaId: string, accessToken: string) {
