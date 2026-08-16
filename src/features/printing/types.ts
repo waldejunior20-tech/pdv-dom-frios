@@ -123,8 +123,10 @@ export type PrintJobRecord = {
   attempt_count: number;
   max_attempts: number;
   retry_interval_ms: number;
+  next_attempt_at: string | null;
   last_error: string | null;
   created_at: string;
+  updated_at: string;
   completed_at: string | null;
 };
 
