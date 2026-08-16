@@ -9,6 +9,8 @@ export const CartItemSchema = z.object({
   discount: z.number().min(0).max(1000000),
   total: z.number().min(0).max(100000000),
   requestId: z.string().uuid(),
+  complements: z.array(z.string().trim().min(1).max(160)).max(30).optional(),
+  notes: z.string().trim().max(500).optional(),
 });
 
 export const SaleSchema = z
