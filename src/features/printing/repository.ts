@@ -108,11 +108,7 @@ export async function removePrinter(id: string) {
   throw error;
 }
 
-export async function updatePrinterStatus(
-  id: string,
-  status: PrinterRecord['status'],
-  statusMessage?: string,
-) {
+export async function updatePrinterStatus(id: string, status: PrinterRecord['status'], statusMessage?: string) {
   const { error } = await supabase
     .from('printers')
     .update({ status, status_message: statusMessage || null, last_seen_at: new Date().toISOString() })
@@ -145,7 +141,8 @@ export async function loadSalePrintData(vendaId: string): Promise<SalePrintData>
       unit: item.unidade,
       unitPrice: Number(item.preco_unitario),
       discount: Number(item.desconto ?? 0),
-      notes: item.observacao,
+      complements: Array.isArray(item.complementos) ? item.complementos.map(String) : [],
+      notes: item.observacao_item,
     })),
     subtotal: Number(sale.subtotal),
     discount: Number(sale.desconto),
@@ -159,21 +156,13 @@ export async function loadSalePrintData(vendaId: string): Promise<SalePrintData>
 }
 
 export async function listRecentSales(limit = 12) {
-  const { data, error } = await supabase
-    .from('vendas')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.from('vendas').select('*').order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
   return data ?? [];
 }
 
 export async function listRecentPrintJobs(limit = 30): Promise<PrintJobRecord[]> {
-  const { data, error } = await supabase
-    .from('print_jobs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(limit);
+  const { data, error } = await supabase.from('print_jobs').select('*').order('created_at', { ascending: false }).limit(limit);
   if (error) throw error;
   return (data ?? []).map((job) => ({
     ...job,
