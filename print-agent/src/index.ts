@@ -29,7 +29,9 @@ async function poll() {
     const { data: jobs, error } = await supabase
       .from("print_jobs")
       .select("*,printers(*)")
-      .eq("state", "pending")
+      .or(
+        `state.eq.pending,and(state.eq.processing,updated_at.lt.${new Date(Date.now() - 300_000).toISOString()})`,
+      )
       .or(
         `next_attempt_at.is.null,next_attempt_at.lte.${new Date().toISOString()}`,
       )
