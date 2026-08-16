@@ -15,6 +15,18 @@ vi.mock("./service", async (importOriginal) => {
     })),
     loadPrintJobs: vi.fn(async () => []),
     loadDiscoveredPrinters: vi.fn(async () => []),
+    loadLocalSystemPrinters: vi.fn(async () => [
+      {
+        queue_name: "GS_T80E",
+        display_name: "GS_T80E",
+        driver_name: "POS-80",
+        device_uri: "socket://192.168.18.100:9100",
+        host: "192.168.18.100",
+        port: 9100,
+        status: "available",
+        is_default: true,
+      },
+    ]),
   };
 });
 
@@ -34,5 +46,8 @@ describe("PrintingSettings", () => {
       screen.getByRole("dialog", { name: /adicionar impressora/i }).hidden,
     ).toBe(false);
     expect(screen.getByLabelText(/nome amigável/i).hidden).toBe(false);
+    expect(
+      (screen.getByLabelText(/^impressora$/i) as HTMLSelectElement).value,
+    ).toBe("GS_T80E");
   });
 });

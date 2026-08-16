@@ -195,6 +195,21 @@
 .manual-printer-title {
   margin-top: 18px;
 }
+
+.local-printer-picker {
+  margin-top: 18px;
+}
+
+.local-printer-picker select {
+  min-height: 56px;
+  font-size: 17px;
+}
+
+.local-printer-add {
+  width: 100%;
+  justify-content: center;
+  margin-top: 12px;
+}
 .printer-row {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr) auto auto 44px;

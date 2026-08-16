@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import {
   addDiscoveredPrinter,
+  addLocalSystemPrinter,
   enqueueTest,
   loadDiscoveredPrinters,
+  loadLocalSystemPrinters,
   loadPrintJobs,
   loadPrinting,
   requeueJob,
@@ -21,7 +23,12 @@ import {
   savePrinter,
   saveSettings,
 } from "./service";
-import type { DiscoveredPrinterQueue, PrintSettings, Printer } from "./types";
+import type {
+  DiscoveredPrinterQueue,
+  LocalSystemPrinter,
+  PrintSettings,
+  Printer,
+} from "./types";
 
 const statusLabels = {
   available: "Disponível",
@@ -55,6 +62,9 @@ export function PrintingSettings({
   });
   const [jobs, setJobs] = useState<Record<string, unknown>[]>([]);
   const [discovered, setDiscovered] = useState<DiscoveredPrinterQueue[]>([]);
+  const [localPrinters, setLocalPrinters] = useState<LocalSystemPrinter[]>([]);
+  const [selectedLocalQueue, setSelectedLocalQueue] = useState("");
+  const [searchingLocal, setSearchingLocal] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -109,6 +119,51 @@ export function PrintingSettings({
         error instanceof Error
           ? error.message
           : "Falha ao adicionar impressora encontrada.",
+      );
+    } finally {
+      setSavingPrinter(false);
+    }
+  }
+  async function openPrinterPicker() {
+    setEditing(true);
+    setSearchingLocal(true);
+    setMessage("Buscando impressoras instaladas neste computador...");
+    try {
+      const queues = await loadLocalSystemPrinters();
+      setLocalPrinters(queues);
+      setSelectedLocalQueue(
+        queues.find((queue) => queue.is_default)?.queue_name ||
+          queues[0]?.queue_name ||
+          "",
+      );
+      setMessage(
+        queues.length
+          ? `${queues.length} impressora(s) encontrada(s) neste computador.`
+          : "Nenhuma impressora instalada foi encontrada neste computador.",
+      );
+    } catch {
+      setLocalPrinters([]);
+      setMessage(
+        "O conector local não está ativo. Instale ou abra o Agente Dom Frios neste computador.",
+      );
+    } finally {
+      setSearchingLocal(false);
+    }
+  }
+  async function addSelectedLocalPrinter() {
+    const queue = localPrinters.find(
+      (printer) => printer.queue_name === selectedLocalQueue,
+    );
+    if (!queue) return;
+    setSavingPrinter(true);
+    try {
+      const printer = await addLocalSystemPrinter(ownerId, queue);
+      setPrinters((rows) => [...rows, printer]);
+      setEditing(false);
+      setMessage(`${queue.display_name} adicionada.`);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Falha ao adicionar.",
       );
     } finally {
       setSavingPrinter(false);
@@ -303,7 +358,7 @@ export function PrintingSettings({
               <h2>Suas Impressoras</h2>
               <p>O status é atualizado pelo agente local.</p>
             </div>
-            <Button className="outline-button" onPress={() => setEditing(true)}>
+            <Button className="outline-button" onPress={openPrinterPicker}>
               <Plus size={17} /> Adicionar
             </Button>
           </div>
@@ -418,6 +473,34 @@ export function PrintingSettings({
                 </Button>
               </Dialog.Close>
             </div>
+            <label className="field full-field local-printer-picker">
+              Impressora
+              <select
+                autoFocus
+                value={selectedLocalQueue}
+                disabled={searchingLocal || localPrinters.length === 0}
+                onChange={(event) => setSelectedLocalQueue(event.target.value)}
+              >
+                <option value="">
+                  {searchingLocal
+                    ? "Buscando impressoras..."
+                    : "Escolha a impressora"}
+                </option>
+                {localPrinters.map((printer) => (
+                  <option key={printer.queue_name} value={printer.queue_name}>
+                    {printer.display_name}
+                    {printer.is_default ? " (Padrão)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <Button
+              className="save-button local-printer-add"
+              isDisabled={!selectedLocalQueue || savingPrinter}
+              onPress={addSelectedLocalPrinter}
+            >
+              Adicionar impressora selecionada
+            </Button>
             {discovered.length > 0 && (
               <section className="discovered-printers">
                 <h3>Instaladas nos computadores</h3>

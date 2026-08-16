@@ -26,6 +26,24 @@ describe("printer discovery", () => {
     expect(rows[1].status).toBe("error");
   });
 
+  it("understands the localized Portuguese CUPS output from macOS", () => {
+    const rows = parseCupsDiscovery({
+      queues: "GS_T80E\n",
+      devices: "dispositivo para GS_T80E: socket://192.168.18.100:9100\n",
+      states:
+        "impressora GS_T80E está ociosa. ativada desde Sun Aug 16 08:11:07 2026\n",
+      defaultQueue: "destino padrão de sistema: GS_T80E\n",
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      queue_name: "GS_T80E",
+      device_uri: "socket://192.168.18.100:9100",
+      status: "available",
+      is_default: true,
+    });
+  });
+
   it("normalizes multiple Windows spooler queues", () => {
     const rows = parseWindowsDiscovery(
       JSON.stringify([

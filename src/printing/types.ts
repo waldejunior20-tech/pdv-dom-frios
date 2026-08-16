@@ -74,6 +74,17 @@ export type DiscoveredPrinterQueue = {
   printer_bindings?: Array<{ id: string }>;
 };
 
+export type LocalSystemPrinter = {
+  queue_name: string;
+  display_name: string;
+  driver_name: string | null;
+  device_uri: string | null;
+  host: string | null;
+  port: number | null;
+  status: "available" | "disconnected" | "error" | "unknown";
+  is_default: boolean;
+};
+
 export type ReceiptPayload = {
   saleId: string;
   customer: string;

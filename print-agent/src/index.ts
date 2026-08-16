@@ -11,10 +11,13 @@ const required = (name: string) => {
   if (!value) throw new Error(`${name} é obrigatório`);
   return value;
 };
-const supabase = createClient(
-  required("SUPABASE_URL"),
-  required("SUPABASE_PUBLISHABLE_KEY"),
-);
+const supabase =
+  process.env.SUPABASE_URL && process.env.SUPABASE_PUBLISHABLE_KEY
+    ? createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_PUBLISHABLE_KEY,
+      )
+    : null;
 const interval = Math.max(500, Number(process.env.POLL_INTERVAL_MS || 1500));
 const agentVersion = "0.2.0";
 let working = false;
@@ -23,6 +26,7 @@ let discoveredCount = 0;
 let lastDiscoveryError: string | null = null;
 
 async function login() {
+  if (!supabase) return;
   const { error } = await supabase.auth.signInWithPassword({
     email: required("PDV_EMAIL"),
     password: required("PDV_PASSWORD"),
@@ -30,6 +34,7 @@ async function login() {
   if (error) throw error;
 }
 async function syncDiscovery() {
+  if (!supabase) return;
   const installationId = await getInstallationId();
   const { data, error } = await supabase.rpc("register_print_agent", {
     p_installation_id: installationId,
@@ -49,7 +54,7 @@ async function syncDiscovery() {
   lastDiscoveryError = null;
 }
 async function poll() {
-  if (working || !agentId) return;
+  if (working || !agentId || !supabase) return;
   working = true;
   try {
     const { data: jobs, error } = await supabase
@@ -174,8 +179,33 @@ setInterval(
 );
 setInterval(() => void poll().catch(console.error), interval);
 void poll();
-createServer((request, response) => {
+const defaultOrigins = [
+  "https://pdv-dom-frios.vercel.app",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+const allowedOrigins = new Set([
+  ...defaultOrigins,
+  ...(process.env.ALLOWED_ORIGINS || "").split(",").filter(Boolean),
+]);
+
+createServer(async (request, response) => {
+  const origin = request.headers.origin;
+  if (origin && !allowedOrigins.has(origin)) {
+    response.statusCode = 403;
+    return response.end(JSON.stringify({ error: "origin_not_allowed" }));
+  }
+  if (origin) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Vary", "Origin");
+  }
+  response.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
   response.setHeader("Content-Type", "application/json");
+  if (request.method === "OPTIONS") {
+    response.statusCode = 204;
+    return response.end();
+  }
   if (request.url === "/health")
     response.end(
       JSON.stringify({
@@ -186,7 +216,19 @@ createServer((request, response) => {
         lastDiscoveryError,
       }),
     );
-  else {
+  else if (request.url === "/printers" && request.method === "GET") {
+    try {
+      const printers = await discoverPrinters();
+      response.end(JSON.stringify({ printers }));
+    } catch (error) {
+      response.statusCode = 503;
+      response.end(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
+  } else {
     response.statusCode = 404;
     response.end(JSON.stringify({ error: "not_found" }));
   }

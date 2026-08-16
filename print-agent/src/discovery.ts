@@ -60,18 +60,20 @@ export function parseCupsDiscovery(input: {
 }): DiscoveredQueue[] {
   const devices = new Map<string, string>();
   for (const line of input.devices.split("\n")) {
-    const match = line.match(/^device for ([^:]+):\s+(.+)$/);
+    const match = line.match(
+      /^(?:device for|dispositivo para) ([^:]+):\s+(.+)$/i,
+    );
     if (match) devices.set(match[1], match[2].trim());
   }
   const states = new Map<string, DiscoveredQueue["status"]>();
   for (const line of input.states.split("\n")) {
-    const match = line.match(/^printer (\S+)\s+(.+)$/);
+    const match = line.match(/^(?:printer|impressora) (\S+)\s+(.+)$/i);
     if (!match) continue;
     states.set(
       match[1],
-      /disabled|stopped/i.test(match[2])
+      /disabled|stopped|desativada|parada/i.test(match[2])
         ? "error"
-        : /idle|printing/i.test(match[2])
+        : /idle|printing|ociosa|imprimindo/i.test(match[2])
           ? "available"
           : "unknown",
     );
@@ -175,7 +177,7 @@ export async function discoverPrinters(): Promise<DiscoveredQueue[]> {
   ]);
   const installedQueues = states.stdout
     .split("\n")
-    .map((line) => line.match(/^printer (\S+)/)?.[1])
+    .map((line) => line.match(/^(?:printer|impressora) (\S+)/i)?.[1])
     .filter((queue): queue is string => Boolean(queue))
     .join("\n");
   return parseCupsDiscovery({

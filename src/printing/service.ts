@@ -2,6 +2,7 @@ import { supabase } from "../lib/supabase";
 import type { CartItem } from "../schemas";
 import type {
   DiscoveredPrinterQueue,
+  LocalSystemPrinter,
   PrintSettings,
   Printer,
   ReceiptPayload,
@@ -53,6 +54,41 @@ export async function loadDiscoveredPrinters() {
   return ((data ?? []) as unknown as DiscoveredPrinterQueue[]).filter(
     (queue) => !queue.printer_bindings?.length,
   );
+}
+
+export async function loadLocalSystemPrinters() {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 4_000);
+  try {
+    const response = await fetch("http://127.0.0.1:17891/printers", {
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error("Agente local indisponível");
+    const body = (await response.json()) as { printers?: LocalSystemPrinter[] };
+    return body.printers ?? [];
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export async function addLocalSystemPrinter(
+  ownerId: string,
+  queue: LocalSystemPrinter,
+) {
+  const networkIp = Boolean(
+    queue.host &&
+    (/^(?:\d{1,3}\.){3}\d{1,3}$/.test(queue.host) || queue.host.includes(":")),
+  );
+  return savePrinter(ownerId, {
+    friendly_name: queue.display_name,
+    model: queue.driver_name,
+    paper_width: 80,
+    connection_mode: networkIp && queue.port ? "network" : "system",
+    system_queue: queue.queue_name,
+    ip: networkIp ? queue.host : null,
+    port: networkIp ? queue.port : null,
+    status: queue.status,
+  });
 }
 
 export async function addDiscoveredPrinter(
