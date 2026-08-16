@@ -117,7 +117,7 @@ export default function App() {
     },
   });
 
-  const products = productsQuery.data ?? [];
+  const products = useMemo(() => productsQuery.data ?? [], [productsQuery.data]);
   const selectedProduct = products.find((product) => product.id === selectedProductId) ?? null;
   const total = useMemo(() => cart.reduce((sum, item) => sum + item.total, 0), [cart]);
 
@@ -135,6 +135,8 @@ export default function App() {
   if (view === 'printing') {
     return <PrintingSettings accessToken={session.access_token} onBack={() => setView('pos')} />;
   }
+
+  const accessToken = session.access_token;
 
   function pressNumber(value: string) {
     if (value === '.' && display.includes('.')) return;
@@ -242,7 +244,7 @@ export default function App() {
       const savedSaleId = String(data ?? parsed.data.saleId);
       let printMessage = 'Venda salva.';
       try {
-        const printResult = await maybeAutoPrintSale(savedSaleId, session.access_token);
+        const printResult = await maybeAutoPrintSale(savedSaleId, accessToken);
         printMessage = printResult.message ?? printMessage;
       } catch (printError) {
         printMessage =
