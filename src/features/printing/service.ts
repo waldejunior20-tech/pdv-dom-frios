@@ -30,7 +30,7 @@ export async function printSale(params: {
       paperWidth: printer.paper_width,
       mode: settings.receipt_mode,
       cut: cutForPrinter(printer, settings.cut_type, settings.auto_cut),
-      feedLines: printer.feed_lines ?? settings.feed_lines,
+      feedLines: printer.feed_lines,
     });
     const job = await createPrintJob({
       vendaId: params.sale.id,
@@ -55,6 +55,7 @@ export async function printSale(params: {
     try {
       const result = await executePrintJob(params.accessToken, job.id);
       if (result.state === 'completed') completed += 1;
+      else if (result.state === 'processing') pending += 1;
       else failed += 1;
     } catch {
       pending += 1;
@@ -67,7 +68,7 @@ export async function printSale(params: {
     pending,
     failed,
     message: pending
-      ? 'Venda salva. Há impressão pendente porque o agente local não respondeu.'
+      ? 'Venda salva. Há impressão pendente ou em processamento.'
       : failed
         ? 'Venda salva, mas uma impressão falhou.'
         : 'Venda salva e impressão processada.',
@@ -91,9 +92,7 @@ export async function printTest(printer: PrinterRecord, accessToken: string) {
   const settings = await getPrintSettings();
   const payload = generateTestReceipt(
     printer.friendly_name,
-    printer.connection_mode === 'network'
-      ? `Rede ${printer.ip}:${printer.port}`
-      : `Fila ${printer.system_queue}`,
+    printer.connection_mode === 'network' ? `Rede ${printer.ip}:${printer.port}` : `Fila ${printer.system_queue}`,
     printer.paper_width,
     settings.auto_cut ? printer.cut_type : 'none',
     printer.feed_lines,
