@@ -40,6 +40,9 @@ describe("PrintingSettings", () => {
       />,
     );
 
+    expect(
+      await screen.findByRole("button", { name: /limpar testes/i }),
+    ).toBeTruthy();
     await user.click(await screen.findByRole("button", { name: /adicionar/i }));
 
     expect(

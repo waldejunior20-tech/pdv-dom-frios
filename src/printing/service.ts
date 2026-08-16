@@ -32,6 +32,7 @@ export async function loadPrinting(ownerId: string) {
     supabase
       .from("printers")
       .select("*,printer_bindings(id,agent_id,enabled,priority)")
+      .eq("enabled", true)
       .order("created_at"),
   ]);
   if (settingsError) throw settingsError;
@@ -159,8 +160,35 @@ export async function savePrinter(
 }
 
 export async function removePrinter(id: string) {
-  const { error } = await supabase.from("printers").delete().eq("id", id);
+  const { data, error } = await supabase
+    .from("printers")
+    .update({ enabled: false })
+    .eq("id", id)
+    .select("id");
   if (error) throw error;
+  if (!data?.length)
+    throw new Error("Impressora não encontrada ou sem permissão.");
+}
+
+export async function removePrintJob(id: string) {
+  const { data, error } = await supabase
+    .from("print_jobs")
+    .delete()
+    .eq("id", id)
+    .select("id");
+  if (error) throw error;
+  if (!data?.length)
+    throw new Error("Registro não encontrado ou sem permissão.");
+}
+
+export async function clearTestPrintJobs() {
+  const { data, error } = await supabase
+    .from("print_jobs")
+    .delete()
+    .contains("receipt_payload", { customer: "TESTE DE IMPRESSÃO" })
+    .select("id");
+  if (error) throw error;
+  return data?.length ?? 0;
 }
 
 export async function loadPrintJobs() {

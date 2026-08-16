@@ -133,6 +133,14 @@
   gap: 7px;
   font-weight: 800;
 }
+.remove-button-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #e1aeb3;
+  background: #fff;
+  color: #c73543;
+}
 .save-button {
   border: 1px solid var(--teal);
   background: var(--teal);

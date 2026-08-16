@@ -12,12 +12,14 @@ import {
 } from "lucide-react";
 import {
   addLocalSystemPrinter,
+  clearTestPrintJobs,
   enqueueTest,
   loadLocalSystemPrinters,
   loadPrintJobs,
   loadPrinting,
   requeueJob,
   removePrinter,
+  removePrintJob,
   saveSettings,
 } from "./service";
 import type { LocalSystemPrinter, PrintSettings, Printer } from "./types";
@@ -129,8 +131,13 @@ export function PrintingSettings({
   }
   async function drop(id: string) {
     if (!window.confirm("Remover esta impressora?")) return;
-    await removePrinter(id);
-    setPrinters((rows) => rows.filter((p) => p.id !== id));
+    try {
+      await removePrinter(id);
+      setPrinters((rows) => rows.filter((p) => p.id !== id));
+      setMessage("Impressora removida.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha ao remover.");
+    }
   }
   async function test(printer: Printer) {
     setMessage("Teste adicionado à fila...");
@@ -147,6 +154,28 @@ export function PrintingSettings({
     await requeueJob(ownerId, job);
     setJobs(await loadPrintJobs());
     setMessage("Reimpressão adicionada à fila.");
+  }
+  async function deleteJob(id: string) {
+    if (!window.confirm("Apagar este registro de impressão?")) return;
+    try {
+      await removePrintJob(id);
+      setJobs((rows) => rows.filter((job) => String(job.id) !== id));
+      setMessage("Registro apagado.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Falha ao apagar.");
+    }
+  }
+  async function clearTests() {
+    if (!window.confirm("Apagar todos os testes de impressão?")) return;
+    try {
+      const removed = await clearTestPrintJobs();
+      setJobs(await loadPrintJobs());
+      setMessage(`${removed} teste(s) apagado(s).`);
+    } catch (error) {
+      setMessage(
+        error instanceof Error ? error.message : "Falha ao limpar testes.",
+      );
+    }
   }
 
   return (
@@ -340,6 +369,9 @@ export function PrintingSettings({
               <h2>Histórico de impressão</h2>
               <p>Últimos 20 trabalhos e reimpressões.</p>
             </div>
+            <Button className="remove-button-text" onPress={clearTests}>
+              <Trash2 size={17} /> Limpar testes
+            </Button>
           </div>
           <div className="job-list">
             {jobs.length === 0 && <p>Nenhuma impressão registrada.</p>}
@@ -365,6 +397,13 @@ export function PrintingSettings({
                 </span>
                 <Button className="outline-button" onPress={() => reprint(job)}>
                   Reimprimir
+                </Button>
+                <Button
+                  className="remove-button"
+                  aria-label="Apagar registro"
+                  onPress={() => deleteJob(String(job.id))}
+                >
+                  <Trash2 />
                 </Button>
               </div>
             ))}
