@@ -11,24 +11,16 @@ import {
   X,
 } from "lucide-react";
 import {
-  addDiscoveredPrinter,
   addLocalSystemPrinter,
   enqueueTest,
-  loadDiscoveredPrinters,
   loadLocalSystemPrinters,
   loadPrintJobs,
   loadPrinting,
   requeueJob,
   removePrinter,
-  savePrinter,
   saveSettings,
 } from "./service";
-import type {
-  DiscoveredPrinterQueue,
-  LocalSystemPrinter,
-  PrintSettings,
-  Printer,
-} from "./types";
+import type { LocalSystemPrinter, PrintSettings, Printer } from "./types";
 
 const statusLabels = {
   available: "Disponível",
@@ -51,33 +43,18 @@ export function PrintingSettings({
   const [message, setMessage] = useState("Carregando configuração...");
   const [editing, setEditing] = useState(false);
   const [savingPrinter, setSavingPrinter] = useState(false);
-  const [printerDraft, setPrinterDraft] = useState({
-    friendly_name: "Impressora da cozinha",
-    model: "Goldensky GS-T80E",
-    connection_mode: "network" as "network" | "system",
-    system_queue: "GS_T80E",
-    ip: "192.168.18.100",
-    port: 9100,
-    paper_width: 80 as 58 | 80,
-  });
   const [jobs, setJobs] = useState<Record<string, unknown>[]>([]);
-  const [discovered, setDiscovered] = useState<DiscoveredPrinterQueue[]>([]);
   const [localPrinters, setLocalPrinters] = useState<LocalSystemPrinter[]>([]);
   const [selectedLocalQueue, setSelectedLocalQueue] = useState("");
   const [searchingLocal, setSearchingLocal] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      loadPrinting(ownerId),
-      loadPrintJobs(),
-      loadDiscoveredPrinters(),
-    ])
-      .then(([data, recentJobs, queues]) => {
+    Promise.all([loadPrinting(ownerId), loadPrintJobs()])
+      .then(([data, recentJobs]) => {
         setSettings(data.settings);
         setPrinters(data.printers);
         setMessage("");
         setJobs(recentJobs);
-        setDiscovered(queues);
       })
       .catch((error: Error) => setMessage(error.message));
   }, [ownerId]);
@@ -103,25 +80,6 @@ export function PrintingSettings({
       setMessage("Configurações salvas.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Falha ao salvar.");
-    }
-  }
-  async function addFoundPrinter(queue: DiscoveredPrinterQueue) {
-    setSavingPrinter(true);
-    setMessage(`Adicionando ${queue.display_name}...`);
-    try {
-      const printer = await addDiscoveredPrinter(ownerId, queue);
-      setPrinters((rows) => [...rows, printer]);
-      setDiscovered((rows) => rows.filter((row) => row.id !== queue.id));
-      setEditing(false);
-      setMessage(`${queue.display_name} adicionada.`);
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Falha ao adicionar impressora encontrada.",
-      );
-    } finally {
-      setSavingPrinter(false);
     }
   }
   async function openPrinterPicker() {
@@ -164,39 +122,6 @@ export function PrintingSettings({
     } catch (error) {
       setMessage(
         error instanceof Error ? error.message : "Falha ao adicionar.",
-      );
-    } finally {
-      setSavingPrinter(false);
-    }
-  }
-  async function addPrinter() {
-    if (!printerDraft.friendly_name.trim())
-      return setMessage("Informe o nome amigável da impressora.");
-    setMessage("Cadastrando impressora...");
-    setSavingPrinter(true);
-    try {
-      const printer = await savePrinter(ownerId, {
-        friendly_name: printerDraft.friendly_name.trim(),
-        model: printerDraft.model.trim() || null,
-        paper_width: printerDraft.paper_width,
-        connection_mode: printerDraft.connection_mode,
-        system_queue: printerDraft.system_queue.trim() || null,
-        ip:
-          printerDraft.connection_mode === "network"
-            ? printerDraft.ip.trim()
-            : null,
-        port:
-          printerDraft.connection_mode === "network" ? printerDraft.port : null,
-        cut_type: "partial",
-        feed_lines: 3,
-        enabled: true,
-      });
-      setPrinters((rows) => [...rows, printer]);
-      setEditing(false);
-      setMessage("GS-T80E cadastrada.");
-    } catch (error) {
-      setMessage(
-        error instanceof Error ? error.message : "Falha ao cadastrar.",
       );
     } finally {
       setSavingPrinter(false);
@@ -463,8 +388,7 @@ export function PrintingSettings({
               <div>
                 <Dialog.Title>Adicionar impressora</Dialog.Title>
                 <Dialog.Description id="printer-dialog-description">
-                  Escolha uma fila encontrada pelo agente ou cadastre
-                  manualmente.
+                  Escolha uma impressora instalada neste computador.
                 </Dialog.Description>
               </div>
               <Dialog.Close asChild>
@@ -501,146 +425,6 @@ export function PrintingSettings({
             >
               Adicionar impressora selecionada
             </Button>
-            {discovered.length > 0 && (
-              <section className="discovered-printers">
-                <h3>Instaladas nos computadores</h3>
-                <p>O agente encontrou estas filas prontas para uso.</p>
-                {discovered.map((queue) => (
-                  <div className="discovered-printer" key={queue.id}>
-                    <div>
-                      <b>{queue.display_name}</b>
-                      <span>
-                        {queue.print_agents.computer_name} ·{" "}
-                        {queue.driver_name || "Driver não informado"}
-                      </span>
-                      <small>{queue.device_uri || queue.queue_name}</small>
-                    </div>
-                    <Button
-                      className="outline-button"
-                      isDisabled={savingPrinter}
-                      onPress={() => addFoundPrinter(queue)}
-                    >
-                      Usar esta
-                    </Button>
-                  </div>
-                ))}
-              </section>
-            )}
-            <h3 className="manual-printer-title">Configuração manual</h3>
-            <div className="printer-form">
-              <label className="field">
-                Nome amigável
-                <input
-                  autoFocus
-                  value={printerDraft.friendly_name}
-                  onChange={(e) =>
-                    setPrinterDraft((draft) => ({
-                      ...draft,
-                      friendly_name: e.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                Modelo
-                <input
-                  value={printerDraft.model}
-                  onChange={(e) =>
-                    setPrinterDraft((draft) => ({
-                      ...draft,
-                      model: e.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                Conexão
-                <select
-                  value={printerDraft.connection_mode}
-                  onChange={(e) =>
-                    setPrinterDraft((draft) => ({
-                      ...draft,
-                      connection_mode: e.target.value as "network" | "system",
-                    }))
-                  }
-                >
-                  <option value="network">Rede LAN</option>
-                  <option value="system">Fila do sistema/CUPS</option>
-                </select>
-              </label>
-              <label className="field">
-                Largura do papel
-                <select
-                  value={printerDraft.paper_width}
-                  onChange={(e) =>
-                    setPrinterDraft((draft) => ({
-                      ...draft,
-                      paper_width: Number(e.target.value) as 58 | 80,
-                    }))
-                  }
-                >
-                  <option value="80">80 mm</option>
-                  <option value="58">58 mm</option>
-                </select>
-              </label>
-              {printerDraft.connection_mode === "network" && (
-                <>
-                  <label className="field">
-                    Endereço IP
-                    <input
-                      value={printerDraft.ip}
-                      onChange={(e) =>
-                        setPrinterDraft((draft) => ({
-                          ...draft,
-                          ip: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    Porta
-                    <input
-                      type="number"
-                      min="1"
-                      max="65535"
-                      value={printerDraft.port}
-                      onChange={(e) =>
-                        setPrinterDraft((draft) => ({
-                          ...draft,
-                          port: Number(e.target.value),
-                        }))
-                      }
-                    />
-                  </label>
-                </>
-              )}
-              <label className="field full-field">
-                Fila instalada no sistema
-                <input
-                  value={printerDraft.system_queue}
-                  onChange={(e) =>
-                    setPrinterDraft((draft) => ({
-                      ...draft,
-                      system_queue: e.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-            <div className="dialog-actions">
-              <Dialog.Close asChild>
-                <Button className="outline-button" isDisabled={savingPrinter}>
-                  Cancelar
-                </Button>
-              </Dialog.Close>
-              <Button
-                className="save-button"
-                isDisabled={savingPrinter}
-                onPress={addPrinter}
-              >
-                {savingPrinter ? "Cadastrando..." : "Cadastrar impressora"}
-              </Button>
-            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

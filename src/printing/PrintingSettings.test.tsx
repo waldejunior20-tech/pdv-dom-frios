@@ -45,7 +45,8 @@ describe("PrintingSettings", () => {
     expect(
       screen.getByRole("dialog", { name: /adicionar impressora/i }).hidden,
     ).toBe(false);
-    expect(screen.getByLabelText(/nome amigável/i).hidden).toBe(false);
+    expect(screen.queryByLabelText(/endereço ip/i)).toBeNull();
+    expect(screen.queryByLabelText(/porta/i)).toBeNull();
     expect(
       (screen.getByLabelText(/^impressora$/i) as HTMLSelectElement).value,
     ).toBe("GS_T80E");

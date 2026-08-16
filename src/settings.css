@@ -160,42 +160,6 @@
   margin-top: 18px;
 }
 
-.discovered-printers {
-  margin: 18px 0;
-  padding: 16px;
-  border: 1px solid #cbd5d8;
-  border-radius: 10px;
-  background: #f3fbfa;
-}
-
-.discovered-printers h3,
-.manual-printer-title {
-  margin: 0 0 6px;
-}
-.discovered-printers > p {
-  margin: 0 0 12px;
-  color: #667176;
-}
-.discovered-printer {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-top: 1px solid #dbe5e6;
-}
-.discovered-printer div {
-  display: grid;
-  gap: 3px;
-}
-.discovered-printer span,
-.discovered-printer small {
-  color: #667176;
-}
-.manual-printer-title {
-  margin-top: 18px;
-}
-
 .local-printer-picker {
   margin-top: 18px;
 }
@@ -290,23 +254,6 @@
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
   padding: 20px;
 }
-.printer-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-  margin-top: 18px;
-}
-.printer-form .full-field {
-  grid-column: 1/-1;
-}
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid #e1e4e5;
-}
 .settings-message {
   min-height: 30px;
   padding: 12px 2px;
@@ -373,11 +320,5 @@
   .quick-add {
     align-items: stretch;
     flex-direction: column;
-  }
-  .printer-form {
-    grid-template-columns: 1fr;
-  }
-  .printer-form .full-field {
-    grid-column: auto;
   }
 }
